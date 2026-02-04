@@ -38,6 +38,7 @@ interface Window {
   api: {
     print: () => Promise<boolean>
     exportDoc: (payload: { title: string; content: string; format: 'pdf' | 'word' }) => Promise<boolean>
+    importTemplates: () => Promise<boolean>
     db: {
       init: () => Promise<boolean>
       listFolders: () => Promise<FolderRow[]>

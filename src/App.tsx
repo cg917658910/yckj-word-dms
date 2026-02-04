@@ -159,12 +159,12 @@ function renderTree(
               {collapsed.has(node.id) ? '+' : '-'}
             </span>
           ) : (
-            <span className='tree-dot' />
+            <span/>
           )}
           <span className='tree-icon' />
           <span className='tree-name'>{node.name}</span>
         </button>
-        <button
+       {/*  <button
           className={`tree-more ${hoverId === node.id ? 'visible' : ''}`}
           onClick={(event) => {
             event.stopPropagation()
@@ -173,7 +173,7 @@ function renderTree(
           }}
         >
           •••
-        </button>
+        </button> */}
       </div>
       {node.children.length && !collapsed.has(node.id) ? (
         <div className='tree-children'>
@@ -569,7 +569,6 @@ function App() {
             <div className='section-title'>快捷</div>
             <div className='quick-item'>Today</div>
             <div className='quick-item'>待办</div>
-            <div className='quick-item'>AI工具</div>
           </div>
 
           <div className='section'>
@@ -577,6 +576,7 @@ function App() {
             <div className='tree'>
               <button className={`tree-row ${activeFolderId === null ? 'active' : ''}`} onClick={() => handleSelectFolder(null)}>
                 <span className='tree-dot' />
+                <span className='tree-icon' />
                 <span className='tree-name'>全部文档</span>
               </button>
               {renderTree(
@@ -595,11 +595,11 @@ function App() {
               setHoverFolderId,
             )}
             </div>
-            <div className='folder-actions'>
+           {/*  <div className='folder-actions'>
               <button className='ghost' onClick={(event) => openCreateMenu(event, activeFolderId)}>新建</button>
               <button className='ghost' onClick={handleRenameFolder} disabled={!activeFolderId}>重命名</button>
               <button className='ghost danger' onClick={handleDeleteFolder} disabled={!activeFolderId}>删除</button>
-            </div>
+            </div> */}
           </div>
 
           <div className='section'>
@@ -621,7 +621,7 @@ function App() {
       <section className='list'>
         <div className='list-header'>
           <div className='search'>
-            <input type='text' placeholder='搜索文档、正文、标签...' />
+            <input type='text' placeholder='搜索文档' />
             <span className='kbd'>Ctrl + K</span>
           </div>
           <div className='list-actions'>
@@ -648,7 +648,10 @@ function App() {
               <button className='doc-main' onClick={() => handleSelectDoc(doc.id)}>
                 <div className='doc-header'>
                   <div>
+                    <div className='doc-title-row'>
+                      <span className='doc-icon' />
                     <div className='doc-title'>{doc.title}</div>
+                    </div>
                     <div className='doc-subtitle'>{doc.snippet || '暂无摘要'}</div>
                   </div>
                   <span className='doc-tag'>文档</span>
@@ -659,7 +662,7 @@ function App() {
                   <span>{formatSize(doc.size)}</span>
                 </div>
               </button>
-              <button
+             {/*  <button
                 className={`doc-more ${hoverDocId === doc.id ? 'visible' : ''}`}
                 onClick={(event) => {
                   event.stopPropagation()
@@ -668,7 +671,7 @@ function App() {
                 }}
               >
                 •••
-              </button>
+              </button> */}
             </div>
           ))}
         </div>
@@ -678,7 +681,6 @@ function App() {
         <div className='editor-toolbar'>
           <div className='editor-title-bar'>
             <div className='editor-title-left'>
-              <button className='tool dot-btn'>•••</button>
               <input
                 className='doc-title-input'
                 value={titleDraft}
@@ -907,6 +909,9 @@ function App() {
             {templatePanel.mode === 'manage' ? (
               <div className='panel-footer'>
                 <button className='ghost' onClick={() => handleOpenTemplateEditor('create')}>新增模板</button>
+                <button className='ghost' onClick={async () => { await window.api.importTemplates(); const next = await window.api.db.listTemplates(); setTemplates(next) }}>
+                  导入模板
+                </button>
                 <button className='primary' onClick={handleSaveAsTemplate} disabled={!activeDoc}>保存当前文档为模板</button>
               </div>
             ) : null}

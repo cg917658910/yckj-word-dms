@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 contextBridge.exposeInMainWorld('api', {
   print: () => ipcRenderer.invoke('doc:print'),
   exportDoc: (payload: { title: string; content: string; format: 'pdf' | 'word' }) => ipcRenderer.invoke('doc:export', payload),
+  importTemplates: () => ipcRenderer.invoke('template:import'),
   db: {
     init: () => ipcRenderer.invoke('db:init'),
     listFolders: () => ipcRenderer.invoke('db:list-folders'),

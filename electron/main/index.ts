@@ -1,10 +1,10 @@
-﻿import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron'
+﻿import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { createRequire } from 'node:module'
-import { fileURLToPath } from 'node:url'
-import path from 'node:path'
 import os from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { importTemplates, registerDbIpc } from './db'
 import { update } from './update'
-import { registerDbIpc } from './db'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -182,5 +182,46 @@ ipcMain.handle('doc:export', async (event, payload: { title: string; content: st
   const docxBuffer = await htmlToDocx(html)
   const fs = await import('node:fs/promises')
   await fs.writeFile(filePath, docxBuffer)
+  return true
+})
+
+ipcMain.handle('template:import', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    title: '导入模板',
+    filters: [
+      { name: '模板文件', extensions: ['pdf', 'docx', 'doc'] },
+    ],
+    properties: ['openFile', 'multiSelections'],
+  })
+  if (canceled || !filePaths.length) return false
+
+  const mammoth = await import('mammoth')
+  const pdfParse = (await import('pdf-parse')).default
+  const fs = await import('node:fs/promises')
+  const pathMod = await import('node:path')
+
+  const items: Array<{ name: string; content: string }> = []
+
+  for (const filePath of filePaths) {
+    const ext = pathMod.extname(filePath).toLowerCase()
+    const base = pathMod.basename(filePath, ext)
+    if (ext === '.docx') {
+      const buffer = await fs.readFile(filePath)
+      const result = await mammoth.convertToHtml({ buffer })
+      items.push({ name: base, content: result.value })
+    } else if (ext === '.pdf') {
+      const buffer = await fs.readFile(filePath)
+      const data = await pdfParse(buffer)
+      const html = `<p>${data.text.replace(/\n+/g, '<br/>')}</p>`
+      items.push({ name: base, content: html })
+    } else if (ext === '.doc') {
+      const buffer = await fs.readFile(filePath)
+      const html = `<p>已导入 Word 文档（.doc），请手动校对格式。</p><pre>${buffer.toString('base64').slice(0, 200)}...</pre>`
+      items.push({ name: base, content: html })
+    }
+  }
+
+  if (!items.length) return false
+  await importTemplates(items)
   return true
 })

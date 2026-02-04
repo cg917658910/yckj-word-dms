@@ -405,6 +405,19 @@ async function deleteTemplate(id: number) {
   return true
 }
 
+export async function importTemplates(items: Array<{ name: string; content: string }>) {
+  const database = await ensureDb()
+  items.forEach((item) => {
+    run(database, 'insert into templates (name, content, updated_at) values (?, ?, datetime(\'now\'))', [
+      item.name,
+      item.content,
+    ])
+  })
+  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  saveDb(database, dbPath)
+  return true
+}
+
 async function applyTemplate(payload: { templateId: number; docId: number }) {
   const database = await ensureDb()
   const template = get<{ content: string }>(database, 'select content from templates where id = ?', [payload.templateId])

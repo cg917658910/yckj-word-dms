@@ -44,6 +44,8 @@ export default defineConfig(({ command }) => {
                 external: [
                   ...Object.keys('dependencies' in pkg ? pkg.dependencies : {}),
                   'html-to-docx',
+                  'mammoth',
+                  'pdf-parse',
                 ],
               },
             },
@@ -62,6 +64,8 @@ export default defineConfig(({ command }) => {
                 external: [
                   ...Object.keys('dependencies' in pkg ? pkg.dependencies : {}),
                   'html-to-docx',
+                  'mammoth',
+                  'pdf-parse',
                 ],
               },
             },
