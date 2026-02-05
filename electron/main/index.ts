@@ -7,18 +7,11 @@ import { importTemplates, registerDbIpc } from './db'
 import { update } from './update'
 
 const require = createRequire(import.meta.url)
+const pdfParse = require("pdf-parse");
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The built directory structure
-//
-// 鈹溾攢鈹?dist-electron
-// 鈹?鈹溾攢鈹?main
-// 鈹?鈹?鈹斺攢鈹€ index.js    > Electron-Main
-// 鈹?鈹斺攢鈹?preload
-// 鈹?  鈹斺攢鈹€ index.mjs   > Preload-Scripts
-// 鈹溾攢鈹?dist
-// 鈹?鈹斺攢鈹€ index.html    > Electron-Renderer
-//
+
 process.env.APP_ROOT = path.join(__dirname, '../..')
 
 export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
@@ -48,6 +41,14 @@ async function createWindow() {
   win = new BrowserWindow({
     title: 'Main window',
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
+    // 默认宽高
+    width: 1600,
+    height: 1000,
+    minWidth: 1400,
+    minHeight: 900,
+
+    // 隐藏菜单栏（Windows/Linux 生效）
+    autoHideMenuBar: true,
     webPreferences: {
       preload,
       // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production
@@ -58,7 +59,7 @@ async function createWindow() {
       // contextIsolation: false,
     },
   })
-
+  win.setMenu(null)
   if (VITE_DEV_SERVER_URL) { // #298
     win.loadURL(VITE_DEV_SERVER_URL)
     // Open devTool if the app is not packaged
@@ -179,8 +180,18 @@ ipcMain.handle('doc:export', async (event, payload: { title: string; content: st
   })
   if (canceled || !filePath) return false
   const htmlToDocx = (await import('html-to-docx')).default
-  const docxBuffer = await htmlToDocx(html)
+  const docxResult = await htmlToDocx(html)
   const fs = await import('node:fs/promises')
+
+  // html-to-docx may return Buffer / ArrayBuffer / Blob depending on environment/types.
+  const docxBuffer: Buffer = Buffer.isBuffer(docxResult)
+    ? docxResult
+    : docxResult instanceof ArrayBuffer
+      ? Buffer.from(new Uint8Array(docxResult))
+      : typeof Blob !== 'undefined' && docxResult instanceof Blob
+        ? Buffer.from(new Uint8Array(await docxResult.arrayBuffer()))
+        : Buffer.from(docxResult as any)
+
   await fs.writeFile(filePath, docxBuffer)
   return true
 })
@@ -194,9 +205,8 @@ ipcMain.handle('template:import', async () => {
     properties: ['openFile', 'multiSelections'],
   })
   if (canceled || !filePaths.length) return false
-
+ 
   const mammoth = await import('mammoth')
-  const pdfParse = (await import('pdf-parse')).default
   const fs = await import('node:fs/promises')
   const pathMod = await import('node:path')
 
@@ -206,16 +216,29 @@ ipcMain.handle('template:import', async () => {
     const ext = pathMod.extname(filePath).toLowerCase()
     const base = pathMod.basename(filePath, ext)
     if (ext === '.docx') {
-      const buffer = await fs.readFile(filePath)
+      const buffer = await fs.readFile(filePath) // Buffer
       const result = await mammoth.convertToHtml({ buffer })
       items.push({ name: base, content: result.value })
     } else if (ext === '.pdf') {
       const buffer = await fs.readFile(filePath)
-      const data = await pdfParse(buffer)
+      // 关键这一行 ↓↓↓
+      const pdf =
+  typeof pdfParse === "function"
+    ? pdfParse
+    : typeof pdfParse?.default === "function"
+    ? pdfParse.default
+    : typeof pdfParse?.default?.default === "function"
+    ? pdfParse.default.default
+    : null;
+
+if (!pdf) {
+  throw new Error("pdf-parse export shape not supported");
+}
+      const data = await pdf(buffer)
       const html = `<p>${data.text.replace(/\n+/g, '<br/>')}</p>`
       items.push({ name: base, content: html })
     } else if (ext === '.doc') {
-      const buffer = await fs.readFile(filePath)
+      const buffer = await fs.readFile(filePath) // Buffer
       const html = `<p>已导入 Word 文档（.doc），请手动校对格式。</p><pre>${buffer.toString('base64').slice(0, 200)}...</pre>`
       items.push({ name: base, content: html })
     }

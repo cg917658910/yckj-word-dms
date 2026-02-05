@@ -32,3 +32,4 @@ yarn.lock
 /playwright-report/
 /playwright/.cache/
 .vs/
+doc/

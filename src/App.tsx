@@ -561,6 +561,24 @@ function App() {
     })
   }
 
+  const handleImportTemplates = async () => {
+    try {
+      await window.api.importTemplates()
+      const next = await window.api.db.listTemplates()
+      setTemplates(next)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      openDialog({
+        title: '导入模板失败',
+        message,
+        confirmText: '知道了',
+        cancelText: '关闭',
+        showInput: false,
+        onConfirm: async () => {},
+      })
+    }
+  }
+
   return (
     <div className='app-shell'>
       <aside className='sidebar'>
@@ -575,7 +593,7 @@ function App() {
         <div className='sidebar-scroll'>
           <div className='section'>
             <div className='section-title'>快捷</div>
-            <div className='quick-item'>Today</div>
+            <div className='quick-item' >Today</div>
             <div className='quick-item'>待办</div>
           </div>
 
@@ -631,12 +649,6 @@ function App() {
           <div className='search'>
             <input type='text' placeholder='搜索文档' />
             <span className='kbd'>Ctrl + K</span>
-          </div>
-          <div className='list-actions'>
-            <button className='ghost' onClick={handleCreateDoc}>新建文档</button>
-            <button className='ghost' onClick={handleRenameDoc} disabled={!activeDoc}>重命名</button>
-            <button className='ghost' onClick={handleCopyDoc} disabled={!activeDoc}>复制</button>
-            <button className='ghost danger' onClick={handleDeleteDoc} disabled={!activeDoc}>删除</button>
           </div>
         </div>
 
@@ -809,7 +821,10 @@ function App() {
                   className='menu-item'
                   onClick={() => {
                     setMenu(null)
-                    handleMenuCreateDoc(menu.folderId === 0 ? activeFolderId : menu.folderId)
+                    const targetFolderId = menu.folderId === 0 ? activeFolderId : menu.folderId
+                    if (typeof targetFolderId === 'number') {
+                      handleMenuCreateDoc(targetFolderId)
+                    }
                   }}
                 >
                   空白文档
@@ -917,7 +932,7 @@ function App() {
             {templatePanel.mode === 'manage' ? (
               <div className='panel-footer'>
                 <button className='ghost' onClick={() => handleOpenTemplateEditor('create')}>新增模板</button>
-                <button className='ghost' onClick={async () => { await window.api.importTemplates(); const next = await window.api.db.listTemplates(); setTemplates(next) }}>
+                <button className='ghost' onClick={handleImportTemplates}>
                   导入模板
                 </button>
                 <button className='primary' onClick={handleSaveAsTemplate} disabled={!activeDoc}>保存当前文档为模板</button>
