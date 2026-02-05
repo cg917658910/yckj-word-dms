@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld('api', {
     createTemplate: (input: { name: string; content: string }) => ipcRenderer.invoke('db:create-template', input),
     updateTemplate: (input: { id: number; name: string; content: string }) => ipcRenderer.invoke('db:update-template', input),
     deleteTemplate: (id: number) => ipcRenderer.invoke('db:delete-template', id),
+    useTemplate: (id: number) => ipcRenderer.invoke('db:use-template', id),
     applyTemplate: (payload: { templateId: number; docId: number }) => ipcRenderer.invoke('db:apply-template', payload),
   },
 })

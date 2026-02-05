@@ -34,6 +34,8 @@ export type TemplateRow = {
   name: string
   content: string
   updatedAt: string
+  lastUsedAt?: string | null
+  usageCount?: number | null
 }
 
 export type CreateFolderInput = {
@@ -113,13 +115,25 @@ async function ensureDb() {
         foreign key (folder_id) references folders(id) on delete set null
       );
 
-      create table if not exists templates (
-        id integer primary key autoincrement,
-        name text not null,
-        content text not null,
-        updated_at text default (datetime('now'))
-      );
-    `)
+    create table if not exists templates (
+      id integer primary key autoincrement,
+      name text not null,
+      content text not null,
+      updated_at text default (datetime('now')),
+      usage_count integer default 0,
+      last_used_at text
+    );
+  `)
+
+    const columns = all<{ name: string }>(database, 'pragma table_info(templates)')
+    const hasUsage = columns.some((col) => col.name === 'usage_count')
+    const hasLastUsed = columns.some((col) => col.name === 'last_used_at')
+    if (!hasUsage) {
+      run(database, 'alter table templates add column usage_count integer default 0')
+    }
+    if (!hasLastUsed) {
+      run(database, 'alter table templates add column last_used_at text')
+    }
 
     db = database
     await seedIfEmpty(database)
@@ -259,25 +273,37 @@ async function listFolders(): Promise<FolderRow[]> {
 
 async function listDocuments(folderId: number | null): Promise<DocSummary[]> {
   const database = await ensureDb()
-  if (folderId !== null) {
-    return all<DocSummary>(
-      database,
-      `select id, folder_id as folderId, title,
-      substr(replace(replace(content, char(10), ' '), char(13), ' '), 1, 120) as snippet,
-      updated_at as updatedAt,
-      length(content) as size
-      from documents where folder_id = ? order by datetime(updated_at) desc`,
-      [folderId]
-    )
-  }
-  return all<DocSummary>(
-    database,
-    `select id, folder_id as folderId, title,
-    substr(replace(replace(content, char(10), ' '), char(13), ' '), 1, 120) as snippet,
-    updated_at as updatedAt,
-    length(content) as size
-    from documents order by datetime(updated_at) desc`
-  )
+  const rows = folderId !== null
+    ? all<{ id: number; folderId: number | null; title: string; content: string; updatedAt: string; size: number }>(
+        database,
+        `select id, folder_id as folderId, title, content,
+        updated_at as updatedAt,
+        length(content) as size
+        from documents where folder_id = ? order by datetime(updated_at) desc`,
+        [folderId]
+      )
+    : all<{ id: number; folderId: number | null; title: string; content: string; updatedAt: string; size: number }>(
+        database,
+        `select id, folder_id as folderId, title, content,
+        updated_at as updatedAt,
+        length(content) as size
+        from documents order by datetime(updated_at) desc`
+      )
+
+  return rows.map((row) => {
+    const text = row.content
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    return {
+      id: row.id,
+      folderId: row.folderId,
+      title: row.title,
+      snippet: text.slice(0, 120),
+      updatedAt: row.updatedAt,
+      size: row.size,
+    }
+  })
 }
 
 async function getDocument(id: number): Promise<DocDetail | null> {
@@ -369,7 +395,7 @@ async function listTemplates(): Promise<TemplateRow[]> {
   const database = await ensureDb()
   return all<TemplateRow>(
     database,
-    'select id, name, content, updated_at as updatedAt from templates order by updated_at desc'
+    'select id, name, content, updated_at as updatedAt, usage_count as usageCount, last_used_at as lastUsedAt from templates order by datetime(last_used_at) desc, usage_count desc, updated_at desc'
   )
 }
 
@@ -426,10 +452,23 @@ async function applyTemplate(payload: { templateId: number; docId: number }) {
     template.content,
     payload.docId,
   ])
+  run(database, 'update templates set usage_count = coalesce(usage_count,0) + 1, last_used_at = datetime(\'now\') where id = ?', [
+    payload.templateId,
+  ])
   const doc = await getDocument(payload.docId)
   const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
   saveDb(database, dbPath)
   return doc
+}
+
+async function useTemplate(id: number) {
+  const database = await ensureDb()
+  run(database, 'update templates set usage_count = coalesce(usage_count,0) + 1, last_used_at = datetime(\'now\') where id = ?', [
+    id,
+  ])
+  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  saveDb(database, dbPath)
+  return true
 }
 
 export function registerDbIpc() {
@@ -452,6 +491,7 @@ export function registerDbIpc() {
   ipcMain.handle('db:create-template', async (_event, input: CreateTemplateInput) => createTemplate(input))
   ipcMain.handle('db:update-template', async (_event, input: UpdateTemplateInput) => updateTemplate(input))
   ipcMain.handle('db:delete-template', async (_event, id: number) => deleteTemplate(id))
+  ipcMain.handle('db:use-template', async (_event, id: number) => useTemplate(id))
   ipcMain.handle('db:apply-template', async (_event, payload: { templateId: number; docId: number }) =>
     applyTemplate(payload)
   )

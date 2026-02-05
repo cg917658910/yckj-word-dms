@@ -30,6 +30,8 @@ type TemplateRow = {
   name: string
   content: string
   updatedAt: string
+  lastUsedAt?: string | null
+  usageCount?: number | null
 }
 
 interface Window {
@@ -55,6 +57,7 @@ interface Window {
       createTemplate: (input: { name: string; content: string }) => Promise<number>
       updateTemplate: (input: { id: number; name: string; content: string }) => Promise<boolean>
       deleteTemplate: (id: number) => Promise<boolean>
+      useTemplate: (id: number) => Promise<boolean>
       applyTemplate: (payload: { templateId: number; docId: number }) => Promise<DocDetail | null>
     }
   }

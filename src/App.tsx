@@ -296,6 +296,7 @@ function App() {
   }, [templateEditor])
 
   const docList = useMemo(() => docs, [docs])
+  const recentTemplates = useMemo(() => templates.slice(0, 10), [templates])
   const filteredTemplates = useMemo(() => {
     const key = templateSearch.trim()
     if (!key) return templates
@@ -587,14 +588,14 @@ function App() {
             <div className='brand'>文档管理系统</div>
             <div className='brand-sub'>本地 · 安全 · 快速</div>
           </div>
-          <button className='primary' onClick={(event) => openCreateMenu(event, activeFolderId)}>+ 新建</button>
+          
         </div>
 
         <div className='sidebar-scroll'>
           <div className='section'>
             <div className='section-title'>快捷</div>
-            <div className='quick-item' >Today</div>
-            <div className='quick-item'>待办</div>
+            <button className='quick-item' onClick={(event) => openCreateMenu(event, activeFolderId)}>+ 新建</button>
+            <button className='quick-item' onClick={() => handleOpenTemplatePanel(activeFolderId, 'create')}>模板</button>
           </div>
 
           <div className='section'>
@@ -630,12 +631,12 @@ function App() {
 
           <div className='section'>
             <div className='section-title-row'>
-              <div className='section-title'>模板库</div>
+              <div className='section-title'>最近模板</div>
               <button className='ghost small' onClick={() => handleOpenTemplatePanel(null, 'manage')}>管理</button>
             </div>
             <div className='template-grid'>
-              {templates.map((item) => (
-                <button key={item.id} className='template-pill' onClick={() => handleApplyTemplate(item.id)}>
+              {recentTemplates.map((item) => (
+                <button key={item.id} className='template-pill' onClick={() => handleMenuCreateFromTemplate(activeFolderId, item)}>
                   {item.name}
                 </button>
               ))}
@@ -711,8 +712,8 @@ function App() {
               />
             </div>
             <div className='editor-title-right'>
-              <button className='tool emphasize' onClick={() => handleOpenTemplatePanel(activeFolderId, 'create')}>模板</button>
-              <div className='editor-menu-wrap'>
+{/*               <button className='tool emphasize' onClick={() => handleOpenTemplatePanel(activeFolderId, 'create')}>模板</button>
+ */}              <div className='editor-menu-wrap'>
                 <button className='tool' onClick={() => setEditorMenuOpen((prev) => !prev)}>•••</button>
                 {editorMenuOpen ? (
                   <div className='menu editor-menu'>
@@ -895,7 +896,7 @@ function App() {
         <div className='panel-backdrop' onClick={() => setTemplatePanel(null)}>
           <div className='panel' onClick={(event) => event.stopPropagation()}>
             <div className='panel-header'>
-              <div className='panel-title'>模板库</div>
+              <div className='panel-title'>最近模板</div>
               <button className='ghost' onClick={() => setTemplatePanel(null)}>关闭</button>
             </div>
             <div className='panel-body'>
@@ -979,3 +980,4 @@ function App() {
 }
 
 export default App
+
