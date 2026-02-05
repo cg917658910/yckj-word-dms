@@ -223,6 +223,14 @@ function App() {
     const rows = await window.api.db.listFolders()
     setFolderRows(rows)
     setFolders(buildTree(rows))
+    // default collapsed
+    const collapsed = new Set<number>()
+    rows.forEach((row) => {
+      if (rows.some((child) => child.parentId === row.id)) {
+        collapsed.add(row.id)
+      }
+    })
+    setCollapsedFolders(collapsed)
   }
 
   const refreshDocs = async (folderId: number | null) => {
