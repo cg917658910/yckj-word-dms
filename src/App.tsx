@@ -285,6 +285,7 @@ function App() {
   const [activeDoc, setActiveDoc] = useState<DocDetail | null>(null)
   const editorRef = useRef<HTMLDivElement | null>(null)
   const savedRangeRef = useRef<Range | null>(null)
+  const suppressSelectionRef = useRef(false)
   const [dialog, setDialog] = useState<DialogState | null>(null)
   const [dialogValue, setDialogValue] = useState('')
   const [collapsedFolders, setCollapsedFolders] = useState<Set<number>>(new Set())
@@ -419,6 +420,7 @@ function App() {
 
   useEffect(() => {
     const handleSelectionChange = () => {
+      if (suppressSelectionRef.current) return
       const selection = window.getSelection()
       if (!selection || selection.rangeCount === 0) return
       const range = selection.getRangeAt(0)
@@ -540,6 +542,7 @@ function App() {
     editorRef.current?.focus()
     restoreSelection()
     fn()
+    captureSelection()
   }
 
   const getSelectedBlocks = () => {
@@ -1037,7 +1040,9 @@ function App() {
           <select
             className='tool-select'
             onMouseDown={(event) => {
+              suppressSelectionRef.current = true
               captureSelection()
+              setTimeout(() => { suppressSelectionRef.current = false }, 0)
             }}
             onChange={(event) => {
               applyWithSelection(() => applyCommand('formatBlock', event.target.value))
@@ -1052,7 +1057,9 @@ function App() {
           <select
             className='tool-select'
             onMouseDown={(event) => {
+              suppressSelectionRef.current = true
               captureSelection()
+              setTimeout(() => { suppressSelectionRef.current = false }, 0)
             }}
             onChange={(event) => {
               applyWithSelection(() => applyCommand('fontSize', event.target.value))
@@ -1069,7 +1076,9 @@ function App() {
             className='tool-select'
             value={lineHeight}
             onMouseDown={(event) => {
+              suppressSelectionRef.current = true
               captureSelection()
+              setTimeout(() => { suppressSelectionRef.current = false }, 0)
             }}
             onChange={(event) => {
               setLineHeight(event.target.value)
@@ -1119,6 +1128,9 @@ function App() {
             ref={editorRef}
             style={{ lineHeight }}
             onKeyDown={handleEditorKeyDown}
+            onKeyUp={captureSelection}
+            onMouseUp={captureSelection}
+            onMouseDown={() => { suppressSelectionRef.current = false }}
             onBlur={handleSave}
           />
         </div>
