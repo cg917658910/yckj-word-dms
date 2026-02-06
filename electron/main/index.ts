@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { importTemplates, registerDbIpc } from './db'
+import { importTemplates, registerDbIpc, createTemplateFolder, createTemplate, listTemplateFolders } from './db'
 //import { update } from './update'
 
 const require = createRequire(import.meta.url)
@@ -262,6 +262,116 @@ ipcMain.handle('template:import', async () => {
 
   if (!items.length) return false
   await importTemplates(items)
+  return true
+})
+
+const toHtmlFromFile = async (filePath: string) => {
+  const fs = await import('node:fs/promises')
+  const pathMod = await import('node:path')
+  const ext = pathMod.extname(filePath).toLowerCase()
+  if (ext === '.docx') {
+    const mammoth = await import('mammoth')
+    const buffer = await fs.readFile(filePath)
+    const styleMap = [
+      "p[style-name='Heading 1'] => h1:fresh",
+      "p[style-name='Heading 2'] => h2:fresh",
+      "p[style-name='Title'] => h1:fresh",
+      "p[style-name='Subtitle'] => h2:fresh",
+      "p[style-name='Quote'] => blockquote:fresh",
+    ]
+    const result = await mammoth.convertToHtml(
+      { buffer },
+      {
+        includeDefaultStyleMap: true,
+        styleMap,
+        ignoreEmptyParagraphs: false,
+        convertImage: mammoth.images.inline(async (image: any) => {
+          const buffer = await image.read('base64')
+          return { src: `data:${image.contentType};base64,${buffer}` }
+        }),
+      },
+    )
+    const normalized = result.value
+      .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+      .replace(/ {2,}/g, (m: string) => `${'&nbsp;'.repeat(m.length - 1)} `)
+    return `<div class="docx-import">${normalized}</div>`
+  }
+  if (ext === '.pdf') {
+    const buffer = await fs.readFile(filePath)
+    const pdfParse = require('pdf-parse/dist/node/cjs/index.cjs') as (input: Buffer) => Promise<{ text: string }>
+    const data = await pdfParse(buffer)
+    return `<p>${data.text.replace(/\n+/g, '<br/>')}</p>`
+  }
+  if (ext === '.doc') {
+    const buffer = await fs.readFile(filePath)
+    return `<p>已导入 Word 文档（.doc），请手动校对格式。</p><pre>${buffer.toString('base64').slice(0, 200)}...</pre>`
+  }
+  return ''
+}
+
+ipcMain.handle('template:upload-files', async (_event, payload?: { folderId?: number | null }) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    title: '上传模板文件',
+    filters: [{ name: '模板文件', extensions: ['pdf', 'docx', 'doc'] }],
+    properties: ['openFile', 'multiSelections'],
+  })
+  if (canceled || !filePaths.length) return false
+  const pathMod = await import('node:path')
+  for (const filePath of filePaths) {
+    const ext = pathMod.extname(filePath).toLowerCase()
+    if (!['.pdf', '.docx', '.doc'].includes(ext)) continue
+    const base = pathMod.basename(filePath, ext)
+    const html = await toHtmlFromFile(filePath)
+    if (!html) continue
+    await createTemplate({ name: base, content: html, folderId: payload?.folderId ?? null })
+  }
+  return true
+})
+
+ipcMain.handle('template:upload-folder', async (_event, payload?: { folderId?: number | null }) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    title: '上传模板文件夹',
+    properties: ['openDirectory', 'multiSelections'],
+  })
+  if (canceled || !filePaths.length) return false
+  const fs = await import('node:fs/promises')
+  const pathMod = await import('node:path')
+  const existing = await listTemplateFolders()
+  const folderKey = (parentId: number | null, name: string) => `${parentId ?? 'root'}::${name}`
+  const folderIdByKey = new Map(existing.map((f) => [folderKey(f.parentId, f.name), f.id]))
+
+  const ensureFolder = async (name: string, parentId: number | null) => {
+    const key = folderKey(parentId, name)
+    const existingId = folderIdByKey.get(key)
+    if (existingId) return existingId
+    const id = await createTemplateFolder({ name, parentId })
+    folderIdByKey.set(key, id)
+    return id
+  }
+
+  const walk = async (root: string, current: string, parentId: number | null) => {
+    const entries = await fs.readdir(current, { withFileTypes: true })
+    for (const entry of entries) {
+      const abs = pathMod.join(current, entry.name)
+      if (entry.isDirectory()) {
+        const nextId = await ensureFolder(entry.name, parentId)
+        await walk(root, abs, nextId)
+      } else {
+        const ext = pathMod.extname(entry.name).toLowerCase()
+        if (!['.pdf', '.docx', '.doc'].includes(ext)) continue
+        const base = pathMod.basename(entry.name, ext)
+        const html = await toHtmlFromFile(abs)
+        if (!html) continue
+        await createTemplate({ name: base, content: html, folderId: parentId })
+      }
+    }
+  }
+
+  for (const root of filePaths) {
+    const rootName = pathMod.basename(root)
+    const rootId = await ensureFolder(rootName, payload?.folderId ?? null)
+    await walk(root, root, rootId)
+  }
   return true
 })
 

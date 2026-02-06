@@ -1216,6 +1216,18 @@ function App() {
     }
   }
 
+  const handleUploadTemplateFiles = async (folderId: number | null) => {
+    await window.api.uploadTemplateFiles(folderId)
+    const next = await window.api.db.listTemplates()
+    syncTreeWithTemplates(next)
+  }
+
+  const handleUploadTemplateFolder = async (folderId: number | null) => {
+    await window.api.uploadTemplateFolder(folderId)
+    const next = await window.api.db.listTemplates()
+    syncTreeWithTemplates(next)
+  }
+
   return (
     <div className='app-shell'>
       <aside className='sidebar'>
@@ -1558,6 +1570,31 @@ function App() {
               >
                 重命名
               </button>
+              {viewMode === 'template' ? (
+                <>
+                  <div className='menu-divider' />
+                  <button
+                    className='menu-item'
+                    onClick={async () => {
+                      setMenu(null)
+                      const targetFolderId = menu.folderId === 0 ? activeTemplateFolderId : menu.folderId
+                      await handleUploadTemplateFiles(typeof targetFolderId === 'number' ? targetFolderId : null)
+                    }}
+                  >
+                    上传文件
+                  </button>
+                  <button
+                    className='menu-item'
+                    onClick={async () => {
+                      setMenu(null)
+                      const targetFolderId = menu.folderId === 0 ? activeTemplateFolderId : menu.folderId
+                      await handleUploadTemplateFolder(typeof targetFolderId === 'number' ? targetFolderId : null)
+                    }}
+                  >
+                    上传文件夹
+                  </button>
+                </>
+              ) : null}
               <button
                 className='menu-item danger'
                 disabled={menu.folderId === 0}

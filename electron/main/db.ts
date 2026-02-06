@@ -260,7 +260,7 @@ async function listFolders(): Promise<FolderRow[]> {
   )
 }
 
-async function listTemplateFolders(): Promise<TemplateFolderRow[]> {
+export async function listTemplateFolders(): Promise<TemplateFolderRow[]> {
   const database = await ensureDb()
   return all<TemplateFolderRow>(
     database,
@@ -374,7 +374,7 @@ async function createFolder(input: CreateFolderInput) {
   return Number(row?.id ?? 0)
 }
 
-async function createTemplateFolder(input: CreateTemplateFolderInput) {
+export async function createTemplateFolder(input: CreateTemplateFolderInput) {
   const database = await ensureDb()
   run(database, 'insert into template_folders (name, parent_id, sort_order) values (?, ?, ?)', [
     input.name,
@@ -395,7 +395,7 @@ async function renameFolder(input: RenameFolderInput) {
   return true
 }
 
-async function renameTemplateFolder(input: RenameTemplateFolderInput) {
+export async function renameTemplateFolder(input: RenameTemplateFolderInput) {
   const database = await ensureDb()
   run(database, 'update template_folders set name = ? where id = ?', [input.name, input.id])
   const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
@@ -411,7 +411,7 @@ async function deleteFolder(id: number) {
   return true
 }
 
-async function deleteTemplateFolder(id: number) {
+export async function deleteTemplateFolder(id: number) {
   const database = await ensureDb()
   run(database, 'delete from template_folders where id = ?', [id])
   const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
@@ -476,7 +476,7 @@ async function listTemplates(): Promise<TemplateRow[]> {
   )
 }
 
-async function createTemplate(input: CreateTemplateInput) {
+export async function createTemplate(input: CreateTemplateInput) {
   const database = await ensureDb()
   run(database, 'insert into templates (name, content, updated_at, folder_id) values (?, ?, datetime(\'now\'), ?)', [
     input.name,

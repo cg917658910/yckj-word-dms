@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('api', {
   print: () => ipcRenderer.invoke('doc:print'),
   exportDoc: (payload: { title: string; content: string; format: 'pdf' | 'word' }) => ipcRenderer.invoke('doc:export', payload),
   importTemplates: () => ipcRenderer.invoke('template:import'),
+  uploadTemplateFiles: (folderId?: number | null) => ipcRenderer.invoke('template:upload-files', { folderId: folderId ?? null }),
+  uploadTemplateFolder: (folderId?: number | null) => ipcRenderer.invoke('template:upload-folder', { folderId: folderId ?? null }),
   db: {
     init: () => ipcRenderer.invoke('db:init'),
     listFolders: () => ipcRenderer.invoke('db:list-folders'),

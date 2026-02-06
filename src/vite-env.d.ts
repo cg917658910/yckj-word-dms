@@ -42,6 +42,8 @@ interface Window {
     print: () => Promise<boolean>
     exportDoc: (payload: { title: string; content: string; format: 'pdf' | 'word' }) => Promise<boolean>
     importTemplates: () => Promise<boolean>
+    uploadTemplateFiles: (folderId?: number | null) => Promise<boolean>
+    uploadTemplateFolder: (folderId?: number | null) => Promise<boolean>
     db: {
       init: () => Promise<boolean>
       listFolders: () => Promise<FolderRow[]>
