@@ -1,7 +1,9 @@
 ﻿.app-shell {
   height: 100vh;
   display: grid;
-  grid-template-columns: 280px 280px minmax(640px, 1fr);
+  grid-template-columns: 260px minmax(720px, 1fr);
+  gap: 16px;
+  padding: 16px;
   box-sizing: border-box;
 }
 
@@ -264,6 +266,35 @@
   border-left: 1px dashed rgba(148, 163, 184, 0.4);
 }
 
+.tree-docs {
+  margin: 4px 0 6px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tree-doc {
+  border: none;
+  background: transparent;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: #475569;
+  cursor: pointer;
+}
+
+.tree-doc.active {
+  background: #eef2f7;
+  color: #1f2937;
+}
+
+.tree-doc-title {
+  font-size: 12px;
+}
+
 .tree-more {
   margin-left: auto;
   border: none;
@@ -420,6 +451,11 @@
   flex-shrink: 0;
 }
 
+.doc-icon.small {
+  width: 14px;
+  height: 16px;
+}
+
 .doc-icon::after {
   content: '';
   position: absolute;
@@ -523,6 +559,8 @@
   padding: 10px 18px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.8);
   background: #f8fafc;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .editor-title-bar {
@@ -549,6 +587,23 @@
 .dot-btn {
   font-weight: 700;
   letter-spacing: 2px;
+}
+
+.editor-format {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 4px;
+}
+
+.tool.icon {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .toolbar-group {
@@ -677,6 +732,10 @@
   margin-top: 20px;
   font-size: 12px;
   color: #64748b;
+}
+
+.editor-paper .docx-import {
+  white-space: pre-wrap;
 }
 
 @media (max-width: 1200px) {

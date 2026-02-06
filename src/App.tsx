@@ -7,6 +7,7 @@ type FolderNode = {
   name: string
   parentId: number | null
   children: FolderNode[]
+  docs: DocSummary[]
 }
 
 type FolderRow = {
@@ -77,12 +78,19 @@ type DocMenuState = {
   y: number
 }
 
-function buildTree(rows: FolderRow[]): FolderNode[] {
+function buildTree(rows: FolderRow[], docs: DocSummary[]): FolderNode[] {
   const map = new Map<number, FolderNode>()
   const roots: FolderNode[] = []
+  const docsByFolder = new Map<number | null, DocSummary[]>()
+
+  docs.forEach((doc) => {
+    const list = docsByFolder.get(doc.folderId ?? null) ?? []
+    list.push(doc)
+    docsByFolder.set(doc.folderId ?? null, list)
+  })
 
   rows.forEach((row) => {
-    map.set(row.id, { id: row.id, name: row.name, parentId: row.parentId, children: [] })
+    map.set(row.id, { id: row.id, name: row.name, parentId: row.parentId, children: [], docs: [] })
   })
 
   rows.forEach((row) => {
@@ -100,6 +108,12 @@ function buildTree(rows: FolderRow[]): FolderNode[] {
     }
   })
 
+  rows.forEach((row) => {
+    const node = map.get(row.id)
+    if (!node) return
+    node.docs = docsByFolder.get(row.id) ?? []
+  })
+
   const sortTree = (nodes: FolderNode[]) => {
     nodes.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
     nodes.forEach((child) => sortTree(child.children))
@@ -107,6 +121,45 @@ function buildTree(rows: FolderRow[]): FolderNode[] {
   sortTree(roots)
 
   return roots
+}
+
+const stripHtml = (html: string) =>
+  html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+const toDocSummary = (detail: DocDetail): DocSummary => {
+  const text = stripHtml(detail.content || '')
+  return {
+    id: detail.id,
+    folderId: detail.folderId ?? null,
+    title: detail.title,
+    snippet: text.slice(0, 120),
+    updatedAt: detail.updatedAt,
+    size: (detail.content || '').length,
+  }
+}
+
+const collectDescendantIds = (rows: FolderRow[], rootId: number) => {
+  const ids = new Set<number>([rootId])
+  let changed = true
+  while (changed) {
+    changed = false
+    rows.forEach((row) => {
+      if (row.parentId !== null && ids.has(row.parentId) && !ids.has(row.id)) {
+        ids.add(row.id)
+        changed = true
+      }
+    })
+  }
+  return ids
+}
+
+const collectDescendantsOnly = (rows: FolderRow[], rootId: number) => {
+  const ids = collectDescendantIds(rows, rootId)
+  ids.delete(rootId)
+  return ids
 }
 
 function formatDate(value: string) {
@@ -133,8 +186,14 @@ function renderTree(
   onMenu: (id: number, x: number, y: number) => void,
   hoverId: number | null,
   setHoverId: (id: number | null) => void,
+  onSelectDoc: (id: number) => void,
+  activeDocId: number | null,
+  onDocMenu: (id: number, x: number, y: number) => void,
 ) {
   return nodes.map((node) => (
+    (() => {
+      const hasToggle = node.children.length || node.docs.length
+      return (
     <div key={`${node.id}-${depth}`} className='tree-node' style={{ '--depth': depth } as CSSProperties}>
       <div
         className='tree-row-wrap'
@@ -147,10 +206,12 @@ function renderTree(
       >
         <button
           className={`tree-row ${selectedId === node.id ? 'active' : ''}`}
-          onClick={() => onSelect?.(node.id)}
+          onClick={() => {
+            onSelect?.(node.id)
+            if (hasToggle) onToggle(node.id)
+          }}
         >
-          {node.children.length ? (
-            <span
+          <span
               className='tree-toggle'
               onClick={(event) => {
                 event.stopPropagation()
@@ -159,9 +220,6 @@ function renderTree(
             >
               {collapsed.has(node.id) ? '+' : '-'}
             </span>
-          ) : (
-            <span/>
-          )}
           <span className='tree-icon' />
           <span className='tree-name'>{node.name}</span>
         </button>
@@ -188,10 +246,33 @@ function renderTree(
             onMenu,
             hoverId,
             setHoverId,
+            onSelectDoc,
+            activeDocId,
+            onDocMenu,
           )}
         </div>
       ) : null}
-          </div>
+      {!collapsed.has(node.id) && node.docs.length ? (
+        <div className='tree-docs'>
+          {node.docs.map((doc) => (
+            <button
+              key={doc.id}
+              className={`tree-doc ${activeDocId === doc.id ? 'active' : ''}`}
+              onClick={() => onSelectDoc(doc.id)}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                onDocMenu(doc.id, event.clientX, event.clientY)
+              }}
+            >
+              <span className='doc-icon small' />
+              <span className='tree-doc-title'>{doc.title}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+      )
+    })()
   ))
 }
 
@@ -203,6 +284,7 @@ function App() {
   const [activeFolderId, setActiveFolderId] = useState<number | null>(null)
   const [activeDoc, setActiveDoc] = useState<DocDetail | null>(null)
   const editorRef = useRef<HTMLDivElement | null>(null)
+  const savedRangeRef = useRef<Range | null>(null)
   const [dialog, setDialog] = useState<DialogState | null>(null)
   const [dialogValue, setDialogValue] = useState('')
   const [collapsedFolders, setCollapsedFolders] = useState<Set<number>>(new Set())
@@ -217,33 +299,71 @@ function App() {
   const [hoverDocId, setHoverDocId] = useState<number | null>(null)
   const [titleDraft, setTitleDraft] = useState('')
   const [editorMenuOpen, setEditorMenuOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
   const [findReplaceOpen, setFindReplaceOpen] = useState(false)
   const [findQuery, setFindQuery] = useState('')
+  const [lineHeight, setLineHeight] = useState('1.9')
+
+  const syncTreeWithDocs = (nextDocs: DocSummary[], nextRows = folderRows) => {
+    setDocs(nextDocs)
+    setFolders(buildTree(nextRows, nextDocs))
+  }
   const [replaceQuery, setReplaceQuery] = useState('')
   const [findCommitQuery, setFindCommitQuery] = useState('')
 
   const folderMap = useMemo(() => new Map(folderRows.map((row) => [row.id, row])), [folderRows])
 
-  const refreshFolders = async () => {
+  const refreshFolders = async (docList?: DocSummary[], preserveCollapsed = true) => {
     const rows = await window.api.db.listFolders()
+    const list = docList ?? (await window.api.db.listDocs(null))
     setFolderRows(rows)
-    setFolders(buildTree(rows))
-    // default collapsed
-    const collapsed = new Set<number>()
-    rows.forEach((row) => {
-      if (rows.some((child) => child.parentId === row.id)) {
-        collapsed.add(row.id)
-      }
+    setFolders(buildTree(rows, list))
+    const folderWithDocs = new Set<number>()
+    list.forEach((doc) => {
+      if (doc.folderId !== null) folderWithDocs.add(doc.folderId)
     })
-    setCollapsedFolders(collapsed)
+    if (!preserveCollapsed) {
+      const collapsed = new Set<number>()
+      rows.forEach((row) => {
+        const hasChildFolder = rows.some((child) => child.parentId === row.id)
+        const hasDocs = folderWithDocs.has(row.id)
+        if (hasChildFolder || hasDocs) {
+          collapsed.add(row.id)
+        }
+      })
+      setCollapsedFolders(collapsed)
+    } else {
+      setCollapsedFolders((prev) => {
+        const next = new Set(prev)
+        // drop removed folders
+        next.forEach((id) => {
+          if (!rows.some((row) => row.id === id)) next.delete(id)
+        })
+        // add new folders with children/docs as collapsed by default
+        rows.forEach((row) => {
+          const hasChildFolder = rows.some((child) => child.parentId === row.id)
+          const hasDocs = folderWithDocs.has(row.id)
+          if ((hasChildFolder || hasDocs) && !next.has(row.id)) {
+            next.add(row.id)
+          }
+        })
+        return next
+      })
+    }
   }
 
   const refreshDocs = async (folderId: number | null) => {
-    const list = await window.api.db.listDocs(folderId)
-    setDocs(list)
-    if (list.length) {
-      const detail = await window.api.db.getDoc(list[0].id)
+    const listAll = await window.api.db.listDocs(null)
+    setDocs(listAll)
+    await refreshFolders(listAll, true)
+    const listInFolder = folderId === null ? listAll : listAll.filter((doc) => doc.folderId === folderId)
+    const currentId = activeDoc?.id ?? null
+    const current = currentId ? listAll.find((doc) => doc.id === currentId) : null
+    const canKeepCurrent =
+      current &&
+      (folderId === null || current.folderId === folderId)
+    if (canKeepCurrent) return
+    if (listInFolder.length) {
+      const detail = await window.api.db.getDoc(listInFolder[0].id)
       setActiveDoc(detail)
     } else {
       setActiveDoc(null)
@@ -272,6 +392,8 @@ function App() {
         next.delete(id)
       } else {
         next.add(id)
+        const descendants = collectDescendantsOnly(folderRows, id)
+        descendants.forEach((childId) => next.add(childId))
       }
       return next
     })
@@ -282,13 +404,51 @@ function App() {
       await window.api.db.init()
       const [templateRows] = await Promise.all([
         window.api.db.listTemplates(),
-        refreshFolders(),
+        refreshFolders(undefined, false),
       ])
       setTemplates(templateRows)
       await refreshDocs(null)
     }
     boot()
   }, [])
+
+  useEffect(() => {
+    document.execCommand('styleWithCSS', false, 'true')
+    document.execCommand('defaultParagraphSeparator', false, 'p')
+  }, [])
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection()
+      if (!selection || selection.rangeCount === 0) return
+      const range = selection.getRangeAt(0)
+      const container = editorRef.current
+      if (!container) return
+      if (container.contains(range.startContainer) && container.contains(range.endContainer)) {
+        savedRangeRef.current = range.cloneRange()
+      }
+    }
+    document.addEventListener('selectionchange', handleSelectionChange)
+    return () => document.removeEventListener('selectionchange', handleSelectionChange)
+  }, [])
+
+  const captureSelection = () => {
+    const selection = window.getSelection()
+    const container = editorRef.current
+    if (!selection || selection.rangeCount === 0 || !container) return
+    const range = selection.getRangeAt(0)
+    if (container.contains(range.startContainer) && container.contains(range.endContainer)) {
+      savedRangeRef.current = range.cloneRange()
+    }
+  }
+
+  const restoreSelection = () => {
+    const range = savedRangeRef.current
+    const selection = window.getSelection()
+    if (!range || !selection) return
+    selection.removeAllRanges()
+    selection.addRange(range)
+  }
 
   useEffect(() => {
     if (!activeDoc || !editorRef.current) return
@@ -301,11 +461,6 @@ function App() {
     templateEditorRef.current.innerHTML = templateEditor.content || ''
   }, [templateEditor])
 
-  const docList = useMemo(() => {
-    if (!searchQuery.trim()) return docs
-    const q = searchQuery.trim()
-    return docs.filter((doc) => doc.title.includes(q) || doc.snippet.includes(q))
-  }, [docs, searchQuery])
   const matchedDocs = useMemo(() => {
     const q = findCommitQuery.trim()
     if (!q) return []
@@ -336,7 +491,13 @@ function App() {
 
   const handleSelectFolder = async (folderId: number | null) => {
     setActiveFolderId(folderId)
-    await refreshDocs(folderId)
+    const next = folderId === null ? docs : docs.filter((doc) => doc.folderId === folderId)
+    if (next.length) {
+      const detail = await window.api.db.getDoc(next[0].id)
+      setActiveDoc(detail)
+    } else {
+      setActiveDoc(null)
+    }
   }
 
   const handleSelectDoc = async (docId: number) => {
@@ -369,6 +530,100 @@ function App() {
     setDocs(list)
   }
 
+  const applyCommand = (command: string, value?: string) => {
+    editorRef.current?.focus()
+    restoreSelection()
+    document.execCommand(command, false, value)
+  }
+
+  const applyWithSelection = (fn: () => void) => {
+    editorRef.current?.focus()
+    restoreSelection()
+    fn()
+  }
+
+  const getSelectedBlocks = () => {
+    const container = editorRef.current
+    const selection = window.getSelection()
+    if (!container || !selection || selection.rangeCount === 0) return []
+    const range = selection.getRangeAt(0)
+    const blockTags = new Set(['p', 'div', 'h1', 'h2', 'h3', 'blockquote', 'li'])
+    const nodes = new Set<HTMLElement>()
+    const walker = document.createTreeWalker(
+      container,
+      NodeFilter.SHOW_ELEMENT,
+      {
+        acceptNode: (node) => {
+          if (!(node instanceof HTMLElement)) return NodeFilter.FILTER_REJECT
+          const tag = node.tagName.toLowerCase()
+          return blockTags.has(tag) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
+        },
+      },
+    )
+    while (walker.nextNode()) {
+      const el = walker.currentNode as HTMLElement
+      if (range.intersectsNode(el)) nodes.add(el)
+    }
+    if (!nodes.size) {
+      let el = selection.focusNode instanceof HTMLElement
+        ? selection.focusNode
+        : selection.focusNode?.parentElement
+      if (!el) {
+        el = selection.anchorNode instanceof HTMLElement
+          ? selection.anchorNode
+          : selection.anchorNode?.parentElement
+      }
+      if (el === container) {
+        el = container.firstElementChild as HTMLElement | null
+      }
+      while (el && el !== container && !blockTags.has(el.tagName.toLowerCase())) {
+        el = el.parentElement
+      }
+      if (el && el !== container) nodes.add(el)
+    }
+    return Array.from(nodes)
+  }
+
+  const ensureBlocks = () => {
+    let blocks = getSelectedBlocks()
+    if (!blocks.length) {
+      applyCommand('formatBlock', 'p')
+      blocks = getSelectedBlocks()
+    }
+    return blocks
+  }
+
+  const applyBlockStyle = (style: 'textAlign' | 'lineHeight', value: string) => {
+    const blocks = ensureBlocks()
+    blocks.forEach((block) => {
+      if (style === 'textAlign') block.style.textAlign = value
+      if (style === 'lineHeight') block.style.lineHeight = value
+    })
+    editorRef.current?.focus()
+  }
+
+  const adjustIndent = (delta: number) => {
+    const blocks = ensureBlocks()
+    blocks.forEach((block) => {
+      const current = parseFloat(block.style.marginLeft || '0')
+      const next = Math.max(0, current + delta)
+      block.style.marginLeft = `${next}px`
+    })
+    editorRef.current?.focus()
+  }
+
+  const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Tab') {
+      event.preventDefault()
+      if (event.shiftKey) {
+        adjustIndent(-24)
+      } else {
+        document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;')
+        editorRef.current?.focus()
+      }
+    }
+  }
+
   const handleApplyTemplate = async (templateId: number) => {
     if (!activeDoc) return
     const next = await window.api.db.applyTemplate({ templateId, docId: activeDoc.id })
@@ -384,8 +639,19 @@ function App() {
       showInput: true,
       onConfirm: async (value) => {
         if (!value) return
-        await window.api.db.createFolder({ name: value, parentId: activeFolderId })
-        await refreshFolders()
+        const id = await window.api.db.createFolder({ name: value, parentId: activeFolderId })
+        if (!id) return
+        const newRow: FolderRow = {
+          id,
+          name: value,
+          parentId: activeFolderId,
+          sortOrder: Date.now(),
+        }
+        setFolderRows((prev) => {
+          const next = [...prev, newRow]
+          setFolders(buildTree(next, docs))
+          return next
+        })
       },
     })
   }
@@ -409,7 +675,11 @@ function App() {
       onConfirm: async (value) => {
         if (!value) return
         await window.api.db.renameFolder({ id: activeFolderId, name: value })
-        await refreshFolders()
+        setFolderRows((prev) => {
+          const next = prev.map((row) => (row.id === activeFolderId ? { ...row, name: value } : row))
+          setFolders(buildTree(next, docs))
+          return next
+        })
       },
     })
   }
@@ -424,9 +694,15 @@ function App() {
       showInput: false,
       onConfirm: async () => {
         await window.api.db.deleteFolder(activeFolderId)
-        setActiveFolderId(null)
-        await refreshFolders()
-        await refreshDocs(null)
+        const idsToRemove = collectDescendantIds(folderRows, activeFolderId)
+        setFolderRows((prev) => {
+          const next = prev.filter((row) => !idsToRemove.has(row.id))
+          const nextDocs = docs.filter((doc) => !idsToRemove.has(doc.folderId ?? -1))
+          syncTreeWithDocs(nextDocs, next)
+          return next
+        })
+        if (idsToRemove.has(activeFolderId)) setActiveFolderId(null)
+        if (activeDoc && idsToRemove.has(activeDoc.folderId ?? -1)) setActiveDoc(null)
       },
     })
   }
@@ -441,8 +717,10 @@ function App() {
       onConfirm: async (value) => {
         if (!value) return
         const detail = await window.api.db.createDoc({ folderId, title: value, content: '' })
-        await refreshDocs(activeFolderId)
-        if (detail) setActiveDoc(detail)
+        if (!detail) return
+        const nextDocs = [toDocSummary(detail), ...docs]
+        syncTreeWithDocs(nextDocs)
+        setActiveDoc(detail)
       },
     })
   }
@@ -453,8 +731,10 @@ function App() {
       title: `${template.name}-${new Date().toLocaleDateString()}`,
       content: template.content,
     })
-    await refreshDocs(activeFolderId)
-    if (detail) setActiveDoc(detail)
+    if (!detail) return
+    const nextDocs = [toDocSummary(detail), ...docs]
+    syncTreeWithDocs(nextDocs)
+    setActiveDoc(detail)
   }
 
   const handleOpenTemplatePanel = (folderId: number | null, mode: 'create' | 'manage') => {
@@ -530,8 +810,10 @@ function App() {
       onConfirm: async (value) => {
         if (!value) return
         const detail = await window.api.db.createDoc({ folderId: activeFolderId, title: value, content: '' })
-        await refreshDocs(activeFolderId)
-        if (detail) setActiveDoc(detail)
+        if (!detail) return
+        const nextDocs = [toDocSummary(detail), ...docs]
+        syncTreeWithDocs(nextDocs)
+        setActiveDoc(detail)
       },
     })
   }
@@ -548,8 +830,10 @@ function App() {
         if (!value) return
         const detail = await window.api.db.renameDoc({ id: activeDoc.id, title: value })
         if (detail) setActiveDoc(detail)
-        const list = await window.api.db.listDocs(activeFolderId)
-        setDocs(list)
+        if (detail) {
+          const nextDocs = docs.map((doc) => (doc.id === detail.id ? { ...doc, title: detail.title, updatedAt: detail.updatedAt } : doc))
+          syncTreeWithDocs(nextDocs)
+        }
       },
     })
   }
@@ -563,7 +847,17 @@ function App() {
       showInput: false,
       onConfirm: async () => {
         await window.api.db.deleteDoc(activeDoc.id)
-        await refreshDocs(activeFolderId)
+        const nextDocs = docs.filter((doc) => doc.id !== activeDoc.id)
+        syncTreeWithDocs(nextDocs)
+        const nextInFolder = nextDocs.find((doc) =>
+          activeFolderId === null ? true : doc.folderId === activeFolderId
+        )
+        if (nextInFolder) {
+          const detail = await window.api.db.getDoc(nextInFolder.id)
+          setActiveDoc(detail)
+        } else {
+          setActiveDoc(null)
+        }
       },
     })
   }
@@ -575,8 +869,10 @@ function App() {
       title: `${activeDoc.title}-副本`,
       content: activeDoc.content,
     })
-    await refreshDocs(activeFolderId)
-    if (detail) setActiveDoc(detail)
+    if (!detail) return
+    const nextDocs = [toDocSummary(detail), ...docs]
+    syncTreeWithDocs(nextDocs)
+    setActiveDoc(detail)
   }
 
   const handlePrint = async () => {
@@ -652,16 +948,21 @@ function App() {
                 0,
                 activeFolderId,
                 handleSelectFolder,
-              collapsedFolders,
-              handleToggleFolder,
-              (id, x, y) => {
-                setActiveFolderId(id)
-                setMenu({ folderId: id, x, y })
-                setMenuSubOpen(false)
-              },
-              hoverFolderId,
-              setHoverFolderId,
-            )}
+                collapsedFolders,
+                handleToggleFolder,
+                (id, x, y) => {
+                  setActiveFolderId(id)
+                  setMenu({ folderId: id, x, y })
+                  setMenuSubOpen(false)
+                },
+                hoverFolderId,
+                setHoverFolderId,
+                handleSelectDoc,
+                activeDoc?.id ?? null,
+                (id, x, y) => {
+                  setDocMenu({ docId: id, x, y })
+                },
+              )}
             </div>
            {/*  <div className='folder-actions'>
               <button className='ghost' onClick={(event) => openCreateMenu(event, activeFolderId)}>新建</button>
@@ -686,68 +987,13 @@ function App() {
         </div>
       </aside>
 
-      <section className='list'>
-        <div className='list-header'>
-          <div className='search'>
-            <input
-              type='text'
-              placeholder='搜索文档'
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
-            <span className='kbd'>Ctrl + K</span>
-          </div>
-        </div>
-
-        <div className='list-body'>
-          {docList.map((doc, index) => (
-            <div
-              key={doc.id}
-              className={`doc-card ${activeDoc?.id === doc.id ? 'active' : ''}`}
-              style={{ '--i': index } as CSSProperties}
-              onMouseEnter={() => setHoverDocId(doc.id)}
-              onMouseLeave={() => setHoverDocId(null)}
-              onContextMenu={(event) => {
-                event.preventDefault()
-                setDocMenu({ docId: doc.id, x: event.clientX, y: event.clientY })
-              }}
-            >
-              <button className='doc-main' onClick={() => handleSelectDoc(doc.id)}>
-                <div className='doc-header'>
-                  <div>
-                    <div className='doc-title-row'>
-                      <span className='doc-icon' />
-                    <div className='doc-title'>{highlight(doc.title, searchQuery)}</div>
-                    </div>
-                  <div className='doc-subtitle'>{highlight(doc.snippet || '暂无摘要', searchQuery)}</div>
-                  </div>
-                  <span className='doc-tag'>文档</span>
-                </div>
-                <div className='doc-meta'>
-                  <span>{formatDate(doc.updatedAt)}</span>
-                  <span className='dot' />
-                  <span>{formatSize(doc.size)}</span>
-                </div>
-              </button>
-             {/*  <button
-                className={`doc-more ${hoverDocId === doc.id ? 'visible' : ''}`}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  const rect = event.currentTarget.getBoundingClientRect()
-                  setDocMenu({ docId: doc.id, x: rect.left, y: rect.bottom + 6 })
-                }}
-              >
-                •••
-              </button> */}
-            </div>
-          ))}
-        </div>
-      </section>
+      
 
       <section className='editor'>
         <div className='editor-toolbar'>
           <div className='editor-title-bar'>
             <div className='editor-title-left'>
+              <button className='tool dot-btn'>•••</button>
               <input
                 className='doc-title-input'
                 value={titleDraft}
@@ -758,8 +1004,8 @@ function App() {
               />
             </div>
             <div className='editor-title-right'>
-{/*               <button className='tool emphasize' onClick={() => handleOpenTemplatePanel(activeFolderId, 'create')}>模板</button>
- */}              <div className='editor-menu-wrap'>
+              <button className='tool emphasize' onClick={() => handleOpenTemplatePanel(activeFolderId, 'create')}>模板</button>
+              <div className='editor-menu-wrap'>
                 <button className='tool' onClick={() => setEditorMenuOpen((prev) => !prev)}>•••</button>
                 {editorMenuOpen ? (
                   <div className='menu editor-menu'>
@@ -785,6 +1031,78 @@ function App() {
           </div>
         </div>
 
+        <div className='editor-format'>
+          <button className='tool icon' onClick={() => applyCommand('undo')}>↶</button>
+          <button className='tool icon' onClick={() => applyCommand('redo')}>↷</button>
+          <select
+            className='tool-select'
+            onMouseDown={(event) => {
+              captureSelection()
+            }}
+            onChange={(event) => {
+              applyWithSelection(() => applyCommand('formatBlock', event.target.value))
+            }}
+            defaultValue='p'
+          >
+            <option value='p'>正文</option>
+            <option value='h1'>标题 1</option>
+            <option value='h2'>标题 2</option>
+            <option value='blockquote'>引用</option>
+          </select>
+          <select
+            className='tool-select'
+            onMouseDown={(event) => {
+              captureSelection()
+            }}
+            onChange={(event) => {
+              applyWithSelection(() => applyCommand('fontSize', event.target.value))
+            }}
+            defaultValue='3'
+          >
+            <option value='2'>12</option>
+            <option value='3'>14</option>
+            <option value='4'>16</option>
+            <option value='5'>18</option>
+            <option value='6'>20</option>
+          </select>
+          <select
+            className='tool-select'
+            value={lineHeight}
+            onMouseDown={(event) => {
+              captureSelection()
+            }}
+            onChange={(event) => {
+              setLineHeight(event.target.value)
+              applyWithSelection(() => applyBlockStyle('lineHeight', event.target.value))
+            }}
+          >
+            <option value='1.4'>行距 1.4</option>
+            <option value='1.6'>行距 1.6</option>
+            <option value='1.8'>行距 1.8</option>
+            <option value='2.0'>行距 2.0</option>
+            <option value='2.4'>行距 2.4</option>
+          </select>
+          <button className='tool' onClick={() => applyWithSelection(() => applyCommand('bold'))}>B</button>
+          <button className='tool' onClick={() => applyWithSelection(() => applyCommand('italic'))}>I</button>
+          <button className='tool' onClick={() => applyWithSelection(() => applyCommand('underline'))}>U</button>
+          <button
+            className='tool'
+            onClick={() => {
+              applyWithSelection(() => {
+                applyCommand('removeFormat')
+                applyCommand('unlink')
+              })
+            }}
+          >
+            清除样式
+          </button>
+          <button className='tool' onClick={() => applyWithSelection(() => applyBlockStyle('textAlign', 'left'))}>左</button>
+          <button className='tool' onClick={() => applyWithSelection(() => applyBlockStyle('textAlign', 'center'))}>中</button>
+          <button className='tool' onClick={() => applyWithSelection(() => applyBlockStyle('textAlign', 'right'))}>右</button>
+          <button className='tool' onClick={() => applyWithSelection(() => adjustIndent(24))}>缩进</button>
+          <button className='tool' onClick={() => applyWithSelection(() => adjustIndent(-24))}>减少缩进</button>
+        </div>
+
         <div className='editor-meta'>
           <div className='doc-badge'>文档</div>
           <div className='doc-info'>
@@ -799,6 +1117,8 @@ function App() {
             contentEditable
             suppressContentEditableWarning
             ref={editorRef}
+            style={{ lineHeight }}
+            onKeyDown={handleEditorKeyDown}
             onBlur={handleSave}
           />
         </div>
@@ -1098,6 +1418,7 @@ function App() {
 }
 
 export default App
+
 
 
 

@@ -222,10 +222,32 @@ ipcMain.handle('template:import', async () => {
     const ext = pathMod.extname(filePath).toLowerCase()
     const base = pathMod.basename(filePath, ext)
     if (ext === '.docx') {
-      const buffer = await fs.readFile(filePath) // Buffer
-      const result = await mammoth.convertToHtml({ buffer })
-      items.push({ name: base, content: result.value })
-      } else if (ext === '.pdf') {
+      const buffer = await fs.readFile(filePath)
+      const styleMap = [
+        "p[style-name='Heading 1'] => h1:fresh",
+        "p[style-name='Heading 2'] => h2:fresh",
+        "p[style-name='Title'] => h1:fresh",
+        "p[style-name='Subtitle'] => h2:fresh",
+        "p[style-name='Quote'] => blockquote:fresh",
+      ]
+      const result = await mammoth.convertToHtml(
+        { buffer },
+        {
+          includeDefaultStyleMap: true,
+          styleMap,
+          ignoreEmptyParagraphs: false,
+          convertImage: mammoth.images.inline(async (image: any) => {
+            const buffer = await image.read('base64')
+            return { src: `data:${image.contentType};base64,${buffer}` }
+          }),
+        },
+      )
+      const normalized = result.value
+        .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+        .replace(/ {2,}/g, (m: string) => `${'&nbsp;'.repeat(m.length - 1)} `)
+      const html = `<div class="docx-import">${normalized}</div>`
+      items.push({ name: base, content: html })
+    } else if (ext === '.pdf') {
         const buffer = await fs.readFile(filePath)
         const pdfParse = require('pdf-parse/dist/node/cjs/index.cjs') as (input: Buffer) => Promise<{ text: string }>
         const data = await pdfParse(buffer)

@@ -360,7 +360,7 @@ async function createDocument(input: CreateDocInput) {
   const database = await ensureDb()
   // 试用期限制创建文档数量
   const currentCount = get<{ count: number }>(database, 'select count(1) as count from documents')
-  if ((currentCount?.count ?? 0) >= 10) {
+  if ((currentCount?.count ?? 0) >= 20) {
    //弹窗提示
    const { dialog } = await import('electron')
    dialog.showErrorBox('试用限制', '试用版最多只能创建10个文档，如需继续使用请联系开发者。')
