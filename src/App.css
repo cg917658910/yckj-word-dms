@@ -141,6 +141,22 @@
   background: #f8fafc;
   color: #334155;
   font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quick-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: #e2e8f0;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .tree {
@@ -977,6 +993,50 @@
   padding: 8px 10px;
   font-size: 14px;
   font-family: inherit;
+}
+
+.panel-hint {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.panel-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.panel-result {
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 8px 10px;
+}
+
+.panel-result-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.panel-result-snippet {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.highlight {
+  background: rgba(255, 214, 102, 0.6);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 3px;
 }
 
 .template-editor {

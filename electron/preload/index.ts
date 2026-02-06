@@ -1,4 +1,4 @@
-﻿import { ipcRenderer, contextBridge } from 'electron'
+﻿import { contextBridge, ipcRenderer } from 'electron'
 
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('api', {
   db: {
     init: () => ipcRenderer.invoke('db:init'),
     listFolders: () => ipcRenderer.invoke('db:list-folders'),
+    countDocs: () => ipcRenderer.invoke('db:count-docs'),
     listDocs: (folderId: number | null) => ipcRenderer.invoke('db:list-docs', folderId),
     getDoc: (id: number) => ipcRenderer.invoke('db:get-doc', id),
     saveDoc: (input: { id: number; title: string; content: string }) => ipcRenderer.invoke('db:save-doc', input),
@@ -40,6 +41,8 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('db:create-doc', input),
     renameDoc: (input: { id: number; title: string }) => ipcRenderer.invoke('db:rename-doc', input),
     deleteDoc: (id: number) => ipcRenderer.invoke('db:delete-doc', id),
+    findReplace: (input: { query: string; replace: string; folderId: number | null }) =>
+      ipcRenderer.invoke('db:find-replace', input),
     listTemplates: () => ipcRenderer.invoke('db:list-templates'),
     createTemplate: (input: { name: string; content: string }) => ipcRenderer.invoke('db:create-template', input),
     updateTemplate: (input: { id: number; name: string; content: string }) => ipcRenderer.invoke('db:update-template', input),

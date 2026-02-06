@@ -53,6 +53,7 @@ interface Window {
       createDoc: (input: { folderId: number | null; title: string; content?: string }) => Promise<DocDetail | null>
       renameDoc: (input: { id: number; title: string }) => Promise<DocDetail | null>
       deleteDoc: (id: number) => Promise<boolean>
+      findReplace: (input: { query: string; replace: string; folderId: number | null }) => Promise<number>
       listTemplates: () => Promise<TemplateRow[]>
       createTemplate: (input: { name: string; content: string }) => Promise<number>
       updateTemplate: (input: { id: number; name: string; content: string }) => Promise<boolean>

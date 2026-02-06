@@ -4,10 +4,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { importTemplates, registerDbIpc } from './db'
-import { update } from './update'
+//import { update } from './update'
 
 const require = createRequire(import.meta.url)
-const pdfParse = require("pdf-parse");
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The built directory structure
@@ -29,6 +28,13 @@ if (os.release().startsWith('6.1')) app.disableHardwareAcceleration()
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
 if (!app.requestSingleInstanceLock()) {
+  app.quit()
+  process.exit(0)
+}
+// 修改此日期控制试用期 本地时间为准
+const end = new Date(2026, 1, 7, 0, 0, 0) // 月份从 0 开始：6 = 7月
+if (new Date() > end) {
+  dialog.showErrorBox('试用期已结束', '感谢您使用本软件，如需继续使用请联系开发者。')
   app.quit()
   process.exit(0)
 }
@@ -80,7 +86,7 @@ async function createWindow() {
   })
 
   // Auto update
-  update(win)
+  //update(win)
 }
 
 app.whenReady().then(() => {
@@ -219,25 +225,13 @@ ipcMain.handle('template:import', async () => {
       const buffer = await fs.readFile(filePath) // Buffer
       const result = await mammoth.convertToHtml({ buffer })
       items.push({ name: base, content: result.value })
-    } else if (ext === '.pdf') {
-      const buffer = await fs.readFile(filePath)
-      // 关键这一行 ↓↓↓
-      const pdf =
-  typeof pdfParse === "function"
-    ? pdfParse
-    : typeof pdfParse?.default === "function"
-    ? pdfParse.default
-    : typeof pdfParse?.default?.default === "function"
-    ? pdfParse.default.default
-    : null;
-
-if (!pdf) {
-  throw new Error("pdf-parse export shape not supported");
-}
-      const data = await pdf(buffer)
-      const html = `<p>${data.text.replace(/\n+/g, '<br/>')}</p>`
-      items.push({ name: base, content: html })
-    } else if (ext === '.doc') {
+      } else if (ext === '.pdf') {
+        const buffer = await fs.readFile(filePath)
+        const pdfParse = require('pdf-parse/dist/node/cjs/index.cjs') as (input: Buffer) => Promise<{ text: string }>
+        const data = await pdfParse(buffer)
+        const html = `<p>${data.text.replace(/\n+/g, '<br/>')}</p>`
+        items.push({ name: base, content: html })
+      } else if (ext === '.doc') {
       const buffer = await fs.readFile(filePath) // Buffer
       const html = `<p>已导入 Word 文档（.doc），请手动校对格式。</p><pre>${buffer.toString('base64').slice(0, 200)}...</pre>`
       items.push({ name: base, content: html })
@@ -248,3 +242,4 @@ if (!pdf) {
   await importTemplates(items)
   return true
 })
+

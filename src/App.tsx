@@ -56,6 +56,7 @@ type MenuState = {
   folderId: number
   x: number
   y: number
+  mode?: 'submenu'
 }
 
 type TemplatePanelState = {
@@ -190,7 +191,7 @@ function renderTree(
           )}
         </div>
       ) : null}
-    </div>
+          </div>
   ))
 }
 
@@ -216,6 +217,11 @@ function App() {
   const [hoverDocId, setHoverDocId] = useState<number | null>(null)
   const [titleDraft, setTitleDraft] = useState('')
   const [editorMenuOpen, setEditorMenuOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [findReplaceOpen, setFindReplaceOpen] = useState(false)
+  const [findQuery, setFindQuery] = useState('')
+  const [replaceQuery, setReplaceQuery] = useState('')
+  const [findCommitQuery, setFindCommitQuery] = useState('')
 
   const folderMap = useMemo(() => new Map(folderRows.map((row) => [row.id, row])), [folderRows])
 
@@ -295,7 +301,32 @@ function App() {
     templateEditorRef.current.innerHTML = templateEditor.content || ''
   }, [templateEditor])
 
-  const docList = useMemo(() => docs, [docs])
+  const docList = useMemo(() => {
+    if (!searchQuery.trim()) return docs
+    const q = searchQuery.trim()
+    return docs.filter((doc) => doc.title.includes(q) || doc.snippet.includes(q))
+  }, [docs, searchQuery])
+  const matchedDocs = useMemo(() => {
+    const q = findCommitQuery.trim()
+    if (!q) return []
+    return docs.filter((doc) => doc.title.includes(q) || doc.snippet.includes(q))
+  }, [docs, findCommitQuery])
+
+  const highlight = (text: string, query: string) => {
+    if (!query) return text
+    const parts = text.split(query)
+    if (parts.length === 1) return text
+    return (
+      <>
+        {parts.map((part, idx) => (
+          <span key={`${part}-${idx}`}>
+            {part}
+            {idx < parts.length - 1 ? <mark className='highlight'>{query}</mark> : null}
+          </span>
+        ))}
+      </>
+    )
+  }
   const recentTemplates = useMemo(() => templates.slice(0, 10), [templates])
   const filteredTemplates = useMemo(() => {
     const key = templateSearch.trim()
@@ -359,11 +390,11 @@ function App() {
     })
   }
 
-  const openCreateMenu = (event: MouseEvent<HTMLButtonElement>, folderId: number | null) => {
+  const openCreateMenu = (event: MouseEvent<HTMLElement>, folderId: number | null, mode?: 'submenu') => {
     const rect = event.currentTarget.getBoundingClientRect()
     if (folderId !== null) setActiveFolderId(folderId)
-    setMenu({ folderId: folderId ?? 0, x: rect.left, y: rect.bottom + 6 })
-    setMenuSubOpen(false)
+    setMenu({ folderId: folderId ?? 0, x: rect.left, y: rect.bottom + 6, mode })
+    setMenuSubOpen(true)
   }
 
   const handleRenameFolder = async () => {
@@ -593,9 +624,19 @@ function App() {
 
         <div className='sidebar-scroll'>
           <div className='section'>
-            <div className='section-title'>快捷</div>
-            <button className='quick-item' onClick={(event) => openCreateMenu(event, activeFolderId)}>+ 新建</button>
-            <button className='quick-item' onClick={() => handleOpenTemplatePanel(activeFolderId, 'create')}>模板</button>
+            <div className='section-title'>快捷工具</div>
+            <div className='quick-item clickable' onClick={(event) => openCreateMenu(event, activeFolderId, 'submenu')}>
+              <span className='quick-icon'>＋</span>
+              新建
+            </div>
+            <div className='quick-item clickable' onClick={() => handleOpenTemplatePanel(activeFolderId, 'create')}>
+              <span className='quick-icon'>▦</span>
+              模板
+            </div>
+            <div className='quick-item clickable' onClick={() => setFindReplaceOpen(true)}>
+              <span className='quick-icon'>⌕</span>
+              查找替换
+            </div>
           </div>
 
           <div className='section'>
@@ -648,7 +689,12 @@ function App() {
       <section className='list'>
         <div className='list-header'>
           <div className='search'>
-            <input type='text' placeholder='搜索文档' />
+            <input
+              type='text'
+              placeholder='搜索文档'
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
             <span className='kbd'>Ctrl + K</span>
           </div>
         </div>
@@ -671,9 +717,9 @@ function App() {
                   <div>
                     <div className='doc-title-row'>
                       <span className='doc-icon' />
-                    <div className='doc-title'>{doc.title}</div>
+                    <div className='doc-title'>{highlight(doc.title, searchQuery)}</div>
                     </div>
-                    <div className='doc-subtitle'>{doc.snippet || '暂无摘要'}</div>
+                  <div className='doc-subtitle'>{highlight(doc.snippet || '暂无摘要', searchQuery)}</div>
                   </div>
                   <span className='doc-tag'>文档</span>
                 </div>
@@ -734,7 +780,7 @@ function App() {
                     </button>
                   </div>
                 ) : null}
-              </div>
+          </div>
             </div>
           </div>
         </div>
@@ -795,7 +841,8 @@ function App() {
             onMouseLeave={() => setMenuSubOpen(false)}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className='menu main'>
+            {menu.mode !== 'submenu' ? (
+              <div className='menu main'>
               <button className='menu-item with-arrow' onMouseEnter={() => setMenuSubOpen(true)}>
                 <span>新建</span>
                 <span className='menu-arrow'>›</span>
@@ -816,7 +863,8 @@ function App() {
                 删除
               </button>
             </div>
-            {menuSubOpen ? (
+            ) : null}
+            {(menuSubOpen || menu.mode === 'submenu') ? (
               <div className='menu submenu' onMouseEnter={() => setMenuSubOpen(true)}>
                 <button
                   className='menu-item'
@@ -975,9 +1023,81 @@ function App() {
           </div>
         </div>
       ) : null}
-    </div>
+
+      {findReplaceOpen ? (
+        <div className='panel-backdrop' onClick={() => setFindReplaceOpen(false)}>
+          <div className='panel editor-panel' onClick={(event) => event.stopPropagation()}>
+            <div className='panel-header'>
+              <div className='panel-title'>查找替换</div>
+              <button className='ghost' onClick={() => setFindReplaceOpen(false)}>关闭</button>
+            </div>
+            <div className='panel-body'>
+              <label className='panel-field'>
+                <span>查找内容</span>
+                <input
+                  value={findQuery}
+                  onChange={(event) => setFindQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      setFindCommitQuery(findQuery)
+                    }
+                  }}
+                  placeholder='回车执行查找'
+                />
+              </label>
+              <label className='panel-field'>
+                <span>替换为</span>
+                <input value={replaceQuery} onChange={(event) => setReplaceQuery(event.target.value)} />
+              </label>
+              <div className='panel-hint'>范围：当前文件夹（全部文档时为全库）</div>
+              {findCommitQuery.trim() ? (
+                <div className='panel-results'>
+                  <div className='panel-hint'>匹配到 {matchedDocs.length} 篇文档</div>
+                  <div className='panel-result-list'>
+                    {matchedDocs.map((doc) => (
+                      <div key={doc.id} className='panel-result'>
+                        <div className='panel-result-title'>{highlight(doc.title, findCommitQuery)}</div>
+                        <div className='panel-result-snippet'>{highlight(doc.snippet || '暂无摘要', findCommitQuery)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+          </div>
+            <div className='panel-footer'>
+              <button className='ghost' onClick={() => setFindReplaceOpen(false)}>取消</button>
+              <button
+                className='primary'
+                disabled={!findQuery.trim()}
+                onClick={async () => {
+                  setFindCommitQuery(findQuery)
+                  const updated = await window.api.db.findReplace({
+                    query: findQuery,
+                    replace: replaceQuery,
+                    folderId: activeFolderId,
+                  })
+                  await refreshDocs(activeFolderId)
+                  setFindReplaceOpen(false)
+                  openDialog({
+                    title: '替换完成',
+                    message: `共更新 ${updated} 篇文档`,
+                    confirmText: '知道了',
+                    showInput: false,
+                    onConfirm: () => {},
+                  })
+                }}
+              >
+                执行替换
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+          </div>
   )
 }
 
 export default App
+
+
 

@@ -1,8 +1,8 @@
-﻿import path from 'node:path'
+﻿import { app, ipcMain } from 'electron'
 import fs from 'node:fs'
-import { app, ipcMain } from 'electron'
-import initSqlJs, { Database } from 'sql.js'
 import { createRequire } from 'node:module'
+import path from 'node:path'
+import initSqlJs, { Database } from 'sql.js'
 
 export type FolderRow = {
   id: number
@@ -57,6 +57,12 @@ export type CreateDocInput = {
 export type RenameDocInput = {
   id: number
   title: string
+}
+
+export type FindReplaceInput = {
+  query: string
+  replace: string
+  folderId: number | null
 }
 
 export type CreateTemplateInput = {
@@ -197,66 +203,16 @@ async function seedIfEmpty(database: Database) {
 
   const folderMap = new Map<string, number>()
 
-  addFolder('C1-信息收集', undefined, 1, folderMap)
-  addFolder('mbti', 'C1-信息收集', 1, folderMap)
-  addFolder('身心健康', 'C1-信息收集', 2, folderMap)
-  addFolder('文旅设计', 'C1-信息收集', 3, folderMap)
-  addFolder('新建文件夹', 'C1-信息收集', 4, folderMap)
-  addFolder('易诚无忧', 'C1-信息收集', 5, folderMap)
-
-  addFolder('C2-研究整理', undefined, 2, folderMap)
-  addFolder('竞品拆解', 'C2-研究整理', 1, folderMap)
-  addFolder('用户画像', 'C2-研究整理', 2, folderMap)
-
-  addFolder('C3-终生成长', undefined, 3, folderMap)
-  addFolder('读书笔记', 'C3-终生成长', 1, folderMap)
-  addFolder('学习路径', 'C3-终生成长', 2, folderMap)
-
-  addFolder('C4-创业一生', undefined, 4, folderMap)
-  addFolder('项目规划', 'C4-创业一生', 1, folderMap)
-
-  addFolder('C5-资料文档', undefined, 5, folderMap)
-  addFolder('模板归档', 'C5-资料文档', 1, folderMap)
-
-  addFolder('C6-剪裁前行', undefined, 6, folderMap)
-  addFolder('复盘记录', 'C6-剪裁前行', 1, folderMap)
+  addFolder('易诚无忧', undefined, 1, folderMap)
 
   const sampleContent = `XX有限公司保密工作领导小组成员履职报告<br/><br/>（20 年度）<br/><br/>姓名：______________ &nbsp;&nbsp;&nbsp;&nbsp; 部门或单位：______________ &nbsp;&nbsp;&nbsp;&nbsp; 职务：______________<br/>初任日期：______________ &nbsp;&nbsp;&nbsp;&nbsp; 序号：______________<br/><br/>填写说明：围绕分工职责和归口责任，具体说明已完成的工作、取得进展、存在问题及建议。`
 
   run(database, 'insert into documents (folder_id, title, content) values (?, ?, ?)', [
     folderMap.get('易诚无忧') ?? null,
-    '附件2-1',
+    '保密工作领导小组成员履职报告范文',
     sampleContent,
   ])
 
-  run(database, 'insert into documents (folder_id, title, content) values (?, ?, ?)', [
-    folderMap.get('模板归档') ?? null,
-    '无标题笔记',
-    '这里是你的灵感草稿，可以开始记录想法。',
-  ])
-
-  run(database, 'insert into documents (folder_id, title, content) values (?, ?, ?)', [
-    folderMap.get('项目规划') ?? null,
-    '【易诚无忧】任务管理系统开发方案',
-    '需求背景、系统流程、角色分工、里程碑等内容在此归档。',
-  ])
-
-  run(database, 'insert into documents (folder_id, title, content) values (?, ?, ?)', [
-    folderMap.get('项目规划') ?? null,
-    '【易诚无忧】任务管理系统需求',
-    '功能边界、权限矩阵、迭代计划在此记录。',
-  ])
-
-  run(database, 'insert into documents (folder_id, title, content) values (?, ?, ?)', [
-    folderMap.get('项目规划') ?? null,
-    '【易诚无忧】社区服务小程序需求',
-    '用户端、平台端、组织、商家、主理人需求要点。',
-  ])
-
-  run(database, 'insert into templates (name, content) values (?, ?)', [
-    '会议纪要',
-    '会议主题：\n时间：\n参会人：\n\n议题与结论：',
-  ])
   run(database, 'insert into templates (name, content) values (?, ?)', ['工作报告', '本周完成：\n下周计划：\n风险问题：'])
   run(database, 'insert into templates (name, content) values (?, ?)', ['合同模板', '合同编号：\n甲方：\n乙方：\n条款：'])
   run(database, 'insert into templates (name, content) values (?, ?)', ['周报模板', '本周目标：\n完成情况：\n改进点：'])
@@ -304,6 +260,42 @@ async function listDocuments(folderId: number | null): Promise<DocSummary[]> {
       size: row.size,
     }
   })
+}
+
+async function findAndReplace(input: FindReplaceInput) {
+  const database = await ensureDb()
+  const rows = input.folderId !== null
+    ? all<{ id: number; title: string; content: string }>(
+        database,
+        'select id, title, content from documents where folder_id = ?',
+        [input.folderId]
+      )
+    : all<{ id: number; title: string; content: string }>(
+        database,
+        'select id, title, content from documents'
+      )
+
+  let updated = 0
+  rows.forEach((row) => {
+    if (!input.query) return
+    const nextTitle = row.title.includes(input.query)
+      ? row.title.split(input.query).join(input.replace)
+      : row.title
+    const nextContent = row.content.includes(input.query)
+      ? row.content.split(input.query).join(input.replace)
+      : row.content
+    if (nextTitle !== row.title || nextContent !== row.content) {
+      run(
+        database,
+        'update documents set title = ?, content = ?, updated_at = datetime(\'now\') where id = ?',
+        [nextTitle, nextContent, row.id]
+      )
+      updated += 1
+    }
+  })
+  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  saveDb(database, dbPath)
+  return updated
 }
 
 async function getDocument(id: number): Promise<DocDetail | null> {
@@ -357,8 +349,23 @@ async function deleteFolder(id: number) {
   return true
 }
 
+//count documents
+async function countDocs() {
+  const database = await ensureDb()
+  const row = get<{ count: number }>(database, 'select count(1) as count from documents')
+  return row?.count ?? 0
+}
+
 async function createDocument(input: CreateDocInput) {
   const database = await ensureDb()
+  // 试用期限制创建文档数量
+  const currentCount = get<{ count: number }>(database, 'select count(1) as count from documents')
+  if ((currentCount?.count ?? 0) >= 10) {
+   //弹窗提示
+   const { dialog } = await import('electron')
+   dialog.showErrorBox('试用限制', '试用版最多只能创建10个文档，如需继续使用请联系开发者。')
+   return null
+  }
   run(database, 'insert into documents (folder_id, title, content) values (?, ?, ?)', [
     input.folderId,
     input.title,
@@ -478,6 +485,7 @@ export function registerDbIpc() {
   })
 
   ipcMain.handle('db:list-folders', async () => listFolders())
+  ipcMain.handle('db:count-doc', async () => countDocs())
   ipcMain.handle('db:list-docs', async (_event, folderId: number | null) => listDocuments(folderId))
   ipcMain.handle('db:get-doc', async (_event, id: number) => getDocument(id))
   ipcMain.handle('db:save-doc', async (_event, input: { id: number; title: string; content: string }) => saveDocument(input))
@@ -487,6 +495,7 @@ export function registerDbIpc() {
   ipcMain.handle('db:create-doc', async (_event, input: CreateDocInput) => createDocument(input))
   ipcMain.handle('db:rename-doc', async (_event, input: RenameDocInput) => renameDocument(input))
   ipcMain.handle('db:delete-doc', async (_event, id: number) => deleteDocument(id))
+  ipcMain.handle('db:find-replace', async (_event, input: FindReplaceInput) => findAndReplace(input))
   ipcMain.handle('db:list-templates', async () => listTemplates())
   ipcMain.handle('db:create-template', async (_event, input: CreateTemplateInput) => createTemplate(input))
   ipcMain.handle('db:update-template', async (_event, input: UpdateTemplateInput) => updateTemplate(input))

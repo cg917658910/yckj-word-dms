@@ -1,9 +1,9 @@
 {
-    "name": "electron-vite-react",
-    "version": "2.2.0",
+    "name": "yckj-word-dms",
+    "version": "2.3.2",
     "main": "dist-electron/main/index.js",
     "description": "Electron Vite React boilerplate.",
-    "author": "閼藉鐎峰▽鈥冲娇 <308487730@qq.com>",
+    "author": "cg <917658910@qq.com>",
     "license": "MIT",
     "private": true,
     "debug": {
