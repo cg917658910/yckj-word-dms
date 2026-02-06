@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('api', {
   db: {
     init: () => ipcRenderer.invoke('db:init'),
     listFolders: () => ipcRenderer.invoke('db:list-folders'),
+    listTemplateFolders: () => ipcRenderer.invoke('db:list-template-folders'),
     countDocs: () => ipcRenderer.invoke('db:count-docs'),
     listDocs: (folderId: number | null) => ipcRenderer.invoke('db:list-docs', folderId),
     getDoc: (id: number) => ipcRenderer.invoke('db:get-doc', id),
@@ -37,6 +38,11 @@ contextBridge.exposeInMainWorld('api', {
     createFolder: (input: { name: string; parentId: number | null }) => ipcRenderer.invoke('db:create-folder', input),
     renameFolder: (input: { id: number; name: string }) => ipcRenderer.invoke('db:rename-folder', input),
     deleteFolder: (id: number) => ipcRenderer.invoke('db:delete-folder', id),
+    createTemplateFolder: (input: { name: string; parentId: number | null }) =>
+      ipcRenderer.invoke('db:create-template-folder', input),
+    renameTemplateFolder: (input: { id: number; name: string }) =>
+      ipcRenderer.invoke('db:rename-template-folder', input),
+    deleteTemplateFolder: (id: number) => ipcRenderer.invoke('db:delete-template-folder', id),
     createDoc: (input: { folderId: number | null; title: string; content?: string }) =>
       ipcRenderer.invoke('db:create-doc', input),
     renameDoc: (input: { id: number; title: string }) => ipcRenderer.invoke('db:rename-doc', input),
@@ -44,8 +50,10 @@ contextBridge.exposeInMainWorld('api', {
     findReplace: (input: { query: string; replace: string; folderId: number | null }) =>
       ipcRenderer.invoke('db:find-replace', input),
     listTemplates: () => ipcRenderer.invoke('db:list-templates'),
-    createTemplate: (input: { name: string; content: string }) => ipcRenderer.invoke('db:create-template', input),
-    updateTemplate: (input: { id: number; name: string; content: string }) => ipcRenderer.invoke('db:update-template', input),
+    createTemplate: (input: { name: string; content: string; folderId?: number | null }) =>
+      ipcRenderer.invoke('db:create-template', input),
+    updateTemplate: (input: { id: number; name: string; content: string; folderId?: number | null }) =>
+      ipcRenderer.invoke('db:update-template', input),
     deleteTemplate: (id: number) => ipcRenderer.invoke('db:delete-template', id),
     useTemplate: (id: number) => ipcRenderer.invoke('db:use-template', id),
     applyTemplate: (payload: { templateId: number; docId: number }) => ipcRenderer.invoke('db:apply-template', payload),

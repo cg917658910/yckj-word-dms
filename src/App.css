@@ -137,6 +137,16 @@
   gap: 8px;
 }
 
+.section-link {
+  color: #2563eb;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.section-link:hover {
+  text-decoration: underline;
+}
+
 .quick-item {
   padding: 8px 12px;
   border-radius: 10px;
@@ -582,6 +592,18 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.link-toggle {
+  color: #2563eb;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.link-toggle:hover {
+  background: rgba(37, 99, 235, 0.08);
 }
 
 .dot-btn {

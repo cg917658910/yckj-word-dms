@@ -36,11 +36,29 @@ export type TemplateRow = {
   updatedAt: string
   lastUsedAt?: string | null
   usageCount?: number | null
+  folderId?: number | null
+}
+
+export type TemplateFolderRow = {
+  id: number
+  name: string
+  parentId: number | null
+  sortOrder: number
 }
 
 export type CreateFolderInput = {
   name: string
   parentId: number | null
+}
+
+export type CreateTemplateFolderInput = {
+  name: string
+  parentId: number | null
+}
+
+export type RenameTemplateFolderInput = {
+  id: number
+  name: string
 }
 
 export type RenameFolderInput = {
@@ -68,12 +86,14 @@ export type FindReplaceInput = {
 export type CreateTemplateInput = {
   name: string
   content: string
+  folderId?: number | null
 }
 
 export type UpdateTemplateInput = {
   id: number
   name: string
   content: string
+  folderId?: number | null
 }
 
 let db: Database | null = null
@@ -127,18 +147,31 @@ async function ensureDb() {
       content text not null,
       updated_at text default (datetime('now')),
       usage_count integer default 0,
-      last_used_at text
+      last_used_at text,
+      folder_id integer,
+      foreign key (folder_id) references template_folders(id) on delete set null
+    );
+    create table if not exists template_folders (
+      id integer primary key autoincrement,
+      name text not null,
+      parent_id integer,
+      sort_order integer default 0,
+      foreign key (parent_id) references template_folders(id) on delete cascade
     );
   `)
 
     const columns = all<{ name: string }>(database, 'pragma table_info(templates)')
     const hasUsage = columns.some((col) => col.name === 'usage_count')
     const hasLastUsed = columns.some((col) => col.name === 'last_used_at')
+    const hasFolderId = columns.some((col) => col.name === 'folder_id')
     if (!hasUsage) {
       run(database, 'alter table templates add column usage_count integer default 0')
     }
     if (!hasLastUsed) {
       run(database, 'alter table templates add column last_used_at text')
+    }
+    if (!hasFolderId) {
+      run(database, 'alter table templates add column folder_id integer')
     }
 
     db = database
@@ -224,6 +257,14 @@ async function listFolders(): Promise<FolderRow[]> {
   return all<FolderRow>(
     database,
     'select id, name, parent_id as parentId, sort_order as sortOrder from folders order by sort_order asc, id asc'
+  )
+}
+
+async function listTemplateFolders(): Promise<TemplateFolderRow[]> {
+  const database = await ensureDb()
+  return all<TemplateFolderRow>(
+    database,
+    'select id, name, parent_id as parentId, sort_order as sortOrder from template_folders order by sort_order asc, id asc'
   )
 }
 
@@ -333,6 +374,19 @@ async function createFolder(input: CreateFolderInput) {
   return Number(row?.id ?? 0)
 }
 
+async function createTemplateFolder(input: CreateTemplateFolderInput) {
+  const database = await ensureDb()
+  run(database, 'insert into template_folders (name, parent_id, sort_order) values (?, ?, ?)', [
+    input.name,
+    input.parentId,
+    Date.now(),
+  ])
+  const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
+  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  saveDb(database, dbPath)
+  return Number(row?.id ?? 0)
+}
+
 async function renameFolder(input: RenameFolderInput) {
   const database = await ensureDb()
   run(database, 'update folders set name = ? where id = ?', [input.name, input.id])
@@ -341,9 +395,25 @@ async function renameFolder(input: RenameFolderInput) {
   return true
 }
 
+async function renameTemplateFolder(input: RenameTemplateFolderInput) {
+  const database = await ensureDb()
+  run(database, 'update template_folders set name = ? where id = ?', [input.name, input.id])
+  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  saveDb(database, dbPath)
+  return true
+}
+
 async function deleteFolder(id: number) {
   const database = await ensureDb()
   run(database, 'delete from folders where id = ?', [id])
+  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  saveDb(database, dbPath)
+  return true
+}
+
+async function deleteTemplateFolder(id: number) {
+  const database = await ensureDb()
+  run(database, 'delete from template_folders where id = ?', [id])
   const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
   saveDb(database, dbPath)
   return true
@@ -402,15 +472,16 @@ async function listTemplates(): Promise<TemplateRow[]> {
   const database = await ensureDb()
   return all<TemplateRow>(
     database,
-    'select id, name, content, updated_at as updatedAt, usage_count as usageCount, last_used_at as lastUsedAt from templates order by datetime(last_used_at) desc, usage_count desc, updated_at desc'
+    'select id, name, content, updated_at as updatedAt, usage_count as usageCount, last_used_at as lastUsedAt, folder_id as folderId from templates order by datetime(last_used_at) desc, usage_count desc, updated_at desc'
   )
 }
 
 async function createTemplate(input: CreateTemplateInput) {
   const database = await ensureDb()
-  run(database, 'insert into templates (name, content, updated_at) values (?, ?, datetime(\'now\'))', [
+  run(database, 'insert into templates (name, content, updated_at, folder_id) values (?, ?, datetime(\'now\'), ?)', [
     input.name,
     input.content,
+    input.folderId ?? null,
   ])
   const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
   const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
@@ -420,9 +491,10 @@ async function createTemplate(input: CreateTemplateInput) {
 
 async function updateTemplate(input: UpdateTemplateInput) {
   const database = await ensureDb()
-  run(database, 'update templates set name = ?, content = ?, updated_at = datetime(\'now\') where id = ?', [
+  run(database, 'update templates set name = ?, content = ?, folder_id = ?, updated_at = datetime(\'now\') where id = ?', [
     input.name,
     input.content,
+    input.folderId ?? null,
     input.id,
   ])
   const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
@@ -485,6 +557,7 @@ export function registerDbIpc() {
   })
 
   ipcMain.handle('db:list-folders', async () => listFolders())
+  ipcMain.handle('db:list-template-folders', async () => listTemplateFolders())
   ipcMain.handle('db:count-doc', async () => countDocs())
   ipcMain.handle('db:list-docs', async (_event, folderId: number | null) => listDocuments(folderId))
   ipcMain.handle('db:get-doc', async (_event, id: number) => getDocument(id))
@@ -492,6 +565,9 @@ export function registerDbIpc() {
   ipcMain.handle('db:create-folder', async (_event, input: CreateFolderInput) => createFolder(input))
   ipcMain.handle('db:rename-folder', async (_event, input: RenameFolderInput) => renameFolder(input))
   ipcMain.handle('db:delete-folder', async (_event, id: number) => deleteFolder(id))
+  ipcMain.handle('db:create-template-folder', async (_event, input: CreateTemplateFolderInput) => createTemplateFolder(input))
+  ipcMain.handle('db:rename-template-folder', async (_event, input: RenameTemplateFolderInput) => renameTemplateFolder(input))
+  ipcMain.handle('db:delete-template-folder', async (_event, id: number) => deleteTemplateFolder(id))
   ipcMain.handle('db:create-doc', async (_event, input: CreateDocInput) => createDocument(input))
   ipcMain.handle('db:rename-doc', async (_event, input: RenameDocInput) => renameDocument(input))
   ipcMain.handle('db:delete-doc', async (_event, id: number) => deleteDocument(id))

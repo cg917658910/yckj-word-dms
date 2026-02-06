@@ -32,6 +32,7 @@ type TemplateRow = {
   updatedAt: string
   lastUsedAt?: string | null
   usageCount?: number | null
+  folderId?: number | null
 }
 
 interface Window {
@@ -44,10 +45,14 @@ interface Window {
     db: {
       init: () => Promise<boolean>
       listFolders: () => Promise<FolderRow[]>
+      listTemplateFolders: () => Promise<FolderRow[]>
       listDocs: (folderId: number | null) => Promise<DocSummary[]>
       getDoc: (id: number) => Promise<DocDetail | null>
       saveDoc: (input: { id: number; title: string; content: string }) => Promise<DocDetail | null>
       createFolder: (input: { name: string; parentId: number | null }) => Promise<number>
+      createTemplateFolder: (input: { name: string; parentId: number | null }) => Promise<number>
+      renameTemplateFolder: (input: { id: number; name: string }) => Promise<boolean>
+      deleteTemplateFolder: (id: number) => Promise<boolean>
       renameFolder: (input: { id: number; name: string }) => Promise<boolean>
       deleteFolder: (id: number) => Promise<boolean>
       createDoc: (input: { folderId: number | null; title: string; content?: string }) => Promise<DocDetail | null>
@@ -55,8 +60,8 @@ interface Window {
       deleteDoc: (id: number) => Promise<boolean>
       findReplace: (input: { query: string; replace: string; folderId: number | null }) => Promise<number>
       listTemplates: () => Promise<TemplateRow[]>
-      createTemplate: (input: { name: string; content: string }) => Promise<number>
-      updateTemplate: (input: { id: number; name: string; content: string }) => Promise<boolean>
+      createTemplate: (input: { name: string; content: string; folderId?: number | null }) => Promise<number>
+      updateTemplate: (input: { id: number; name: string; content: string; folderId?: number | null }) => Promise<boolean>
       deleteTemplate: (id: number) => Promise<boolean>
       useTemplate: (id: number) => Promise<boolean>
       applyTemplate: (payload: { templateId: number; docId: number }) => Promise<DocDetail | null>

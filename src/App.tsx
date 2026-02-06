@@ -17,6 +17,8 @@ type FolderRow = {
   sortOrder: number
 }
 
+type TemplateFolderRow = FolderRow
+
 type DocSummary = {
   id: number
   folderId: number | null
@@ -40,6 +42,9 @@ type TemplateRow = {
   name: string
   content: string
   updatedAt: string
+  lastUsedAt?: string | null
+  usageCount?: number | null
+  folderId?: number | null
 }
 
 type DialogState = {
@@ -138,6 +143,18 @@ const toDocSummary = (detail: DocDetail): DocSummary => {
     snippet: text.slice(0, 120),
     updatedAt: detail.updatedAt,
     size: (detail.content || '').length,
+  }
+}
+
+const toTemplateSummary = (template: TemplateRow): DocSummary => {
+  const text = stripHtml(template.content || '')
+  return {
+    id: template.id,
+    folderId: template.folderId ?? null,
+    title: template.name,
+    snippet: text.slice(0, 120),
+    updatedAt: template.updatedAt,
+    size: (template.content || '').length,
   }
 }
 
@@ -280,15 +297,20 @@ function App() {
   const [folderRows, setFolderRows] = useState<FolderRow[]>([])
   const [folders, setFolders] = useState<FolderNode[]>([])
   const [docs, setDocs] = useState<DocSummary[]>([])
+  const [templateFolderRows, setTemplateFolderRows] = useState<TemplateFolderRow[]>([])
+  const [templateFolders, setTemplateFolders] = useState<FolderNode[]>([])
   const [templates, setTemplates] = useState<TemplateRow[]>([])
   const [activeFolderId, setActiveFolderId] = useState<number | null>(null)
+  const [activeTemplateFolderId, setActiveTemplateFolderId] = useState<number | null>(null)
   const [activeDoc, setActiveDoc] = useState<DocDetail | null>(null)
+  const [activeTemplate, setActiveTemplate] = useState<TemplateRow | null>(null)
   const editorRef = useRef<HTMLDivElement | null>(null)
   const savedRangeRef = useRef<Range | null>(null)
   const suppressSelectionRef = useRef(false)
   const [dialog, setDialog] = useState<DialogState | null>(null)
   const [dialogValue, setDialogValue] = useState('')
   const [collapsedFolders, setCollapsedFolders] = useState<Set<number>>(new Set())
+  const [collapsedTemplateFolders, setCollapsedTemplateFolders] = useState<Set<number>>(new Set())
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [hoverFolderId, setHoverFolderId] = useState<number | null>(null)
   const [templatePanel, setTemplatePanel] = useState<TemplatePanelState | null>(null)
@@ -297,21 +319,33 @@ function App() {
   const [templateSearch, setTemplateSearch] = useState('')
   const templateEditorRef = useRef<HTMLDivElement | null>(null)
   const [docMenu, setDocMenu] = useState<DocMenuState | null>(null)
+  const [templateMenu, setTemplateMenu] = useState<DocMenuState | null>(null)
   const [hoverDocId, setHoverDocId] = useState<number | null>(null)
   const [titleDraft, setTitleDraft] = useState('')
   const [editorMenuOpen, setEditorMenuOpen] = useState(false)
   const [findReplaceOpen, setFindReplaceOpen] = useState(false)
   const [findQuery, setFindQuery] = useState('')
   const [lineHeight, setLineHeight] = useState('1.9')
+  const [viewMode, setViewMode] = useState<'doc' | 'template'>('doc')
 
   const syncTreeWithDocs = (nextDocs: DocSummary[], nextRows = folderRows) => {
     setDocs(nextDocs)
     setFolders(buildTree(nextRows, nextDocs))
   }
+
+  const syncTreeWithTemplates = (nextTemplates: TemplateRow[], nextRows = templateFolderRows) => {
+    setTemplates(nextTemplates)
+    const templateDocs = nextTemplates.map(toTemplateSummary)
+    setTemplateFolders(buildTree(nextRows, templateDocs))
+  }
   const [replaceQuery, setReplaceQuery] = useState('')
   const [findCommitQuery, setFindCommitQuery] = useState('')
 
   const folderMap = useMemo(() => new Map(folderRows.map((row) => [row.id, row])), [folderRows])
+  const templateFolderMap = useMemo(
+    () => new Map(templateFolderRows.map((row) => [row.id, row])),
+    [templateFolderRows]
+  )
 
   const refreshFolders = async (docList?: DocSummary[], preserveCollapsed = true) => {
     const rows = await window.api.db.listFolders()
@@ -349,6 +383,29 @@ function App() {
         })
         return next
       })
+    }
+  }
+
+  const refreshTemplateFolders = async (templateList?: TemplateRow[], preserveCollapsed = true) => {
+    const rows = await window.api.db.listTemplateFolders()
+    const list = templateList ?? (await window.api.db.listTemplates())
+    setTemplateFolderRows(rows)
+    setTemplates(list)
+    setTemplateFolders(buildTree(rows, list.map(toTemplateSummary)))
+    if (!preserveCollapsed) {
+      const collapsed = new Set<number>()
+      const folderWithTemplates = new Set<number>()
+      list.forEach((item) => {
+        if (item.folderId !== null && item.folderId !== undefined) folderWithTemplates.add(item.folderId)
+      })
+      rows.forEach((row) => {
+        const hasChildFolder = rows.some((child) => child.parentId === row.id)
+        const hasTemplates = folderWithTemplates.has(row.id)
+        if (hasChildFolder || hasTemplates) {
+          collapsed.add(row.id)
+        }
+      })
+      setCollapsedTemplateFolders(collapsed)
     }
   }
 
@@ -400,12 +457,27 @@ function App() {
     })
   }
 
+  const handleToggleTemplateFolder = (id: number) => {
+    setCollapsedTemplateFolders((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+        const descendants = collectDescendantsOnly(templateFolderRows, id)
+        descendants.forEach((childId) => next.add(childId))
+      }
+      return next
+    })
+  }
+
   useEffect(() => {
     const boot = async () => {
       await window.api.db.init()
       const [templateRows] = await Promise.all([
         window.api.db.listTemplates(),
         refreshFolders(undefined, false),
+        refreshTemplateFolders(undefined, false),
       ])
       setTemplates(templateRows)
       await refreshDocs(null)
@@ -453,10 +525,33 @@ function App() {
   }
 
   useEffect(() => {
+    if (viewMode !== 'doc') return
     if (!activeDoc || !editorRef.current) return
     editorRef.current.innerHTML = activeDoc.content || ''
     setTitleDraft(activeDoc.title)
-  }, [activeDoc])
+  }, [activeDoc, viewMode])
+
+  useEffect(() => {
+    if (viewMode !== 'template') return
+    if (!activeTemplate || !editorRef.current) return
+    editorRef.current.innerHTML = activeTemplate.content || ''
+    setTitleDraft(activeTemplate.name)
+  }, [activeTemplate, viewMode])
+
+  useEffect(() => {
+    if (viewMode === 'doc') {
+      setTitleDraft(activeDoc?.title ?? '')
+    } else {
+      setTitleDraft(activeTemplate?.name ?? '')
+    }
+  }, [viewMode, activeDoc, activeTemplate])
+
+  useEffect(() => {
+    if (viewMode !== 'template') return
+    if (!activeTemplate && templates.length) {
+      setActiveTemplate(templates[0])
+    }
+  }, [viewMode, templates, activeTemplate])
 
   useEffect(() => {
     if (!templateEditor || !templateEditorRef.current) return
@@ -502,34 +597,96 @@ function App() {
     }
   }
 
+  const handleSelectTemplateFolder = (folderId: number | null) => {
+    setActiveTemplateFolderId(folderId)
+    const next = folderId === null
+      ? templates
+      : templates.filter((tpl) => (tpl.folderId ?? null) === folderId)
+    if (next.length) {
+      setActiveTemplate(next[0])
+    } else {
+      setActiveTemplate(null)
+    }
+  }
+
   const handleSelectDoc = async (docId: number) => {
     const detail = await window.api.db.getDoc(docId)
     setActiveDoc(detail)
   }
 
+  const handleSelectTemplate = (templateId: number) => {
+    const item = templates.find((tpl) => tpl.id === templateId) ?? null
+    setActiveTemplate(item)
+  }
+
   const handleSave = async () => {
-    if (!activeDoc || !editorRef.current) return
-    const next = await window.api.db.saveDoc({
-      id: activeDoc.id,
-      title: titleDraft.trim() || activeDoc.title,
-      content: editorRef.current.innerHTML,
-    })
-    setActiveDoc(next)
-    const list = await window.api.db.listDocs(activeFolderId)
-    setDocs(list)
+    if (!editorRef.current) return
+    if (viewMode === 'doc') {
+      if (!activeDoc) return
+      const next = await window.api.db.saveDoc({
+        id: activeDoc.id,
+        title: titleDraft.trim() || activeDoc.title,
+        content: editorRef.current.innerHTML,
+      })
+      setActiveDoc(next)
+      if (next) {
+        const nextDocs = docs.map((doc) =>
+          doc.id === next.id ? { ...doc, title: next.title, updatedAt: next.updatedAt, snippet: stripHtml(next.content || '').slice(0, 120) } : doc
+        )
+        syncTreeWithDocs(nextDocs)
+      }
+      return
+    }
+    if (viewMode === 'template') {
+      if (!activeTemplate) return
+      const next = {
+        ...activeTemplate,
+        name: titleDraft.trim() || activeTemplate.name,
+        content: editorRef.current.innerHTML,
+      }
+      await window.api.db.updateTemplate({
+        id: activeTemplate.id,
+        name: next.name,
+        content: next.content,
+        folderId: next.folderId ?? null,
+      })
+      setActiveTemplate(next)
+      const nextTemplates = templates.map((tpl) => (tpl.id === next.id ? { ...tpl, name: next.name, content: next.content, updatedAt: new Date().toISOString() } : tpl))
+      syncTreeWithTemplates(nextTemplates)
+    }
   }
 
   const handleTitleBlur = async () => {
-    if (!activeDoc) return
     if (!titleDraft.trim()) {
-      setTitleDraft(activeDoc.title)
+      if (viewMode === 'doc' && activeDoc) setTitleDraft(activeDoc.title)
+      if (viewMode === 'template' && activeTemplate) setTitleDraft(activeTemplate.name)
       return
     }
-    if (titleDraft.trim() === activeDoc.title) return
-    const detail = await window.api.db.renameDoc({ id: activeDoc.id, title: titleDraft.trim() })
-    if (detail) setActiveDoc(detail)
-    const list = await window.api.db.listDocs(activeFolderId)
-    setDocs(list)
+    if (viewMode === 'doc') {
+      if (!activeDoc) return
+      if (titleDraft.trim() === activeDoc.title) return
+      const detail = await window.api.db.renameDoc({ id: activeDoc.id, title: titleDraft.trim() })
+      if (detail) setActiveDoc(detail)
+      if (detail) {
+        const nextDocs = docs.map((doc) => (doc.id === detail.id ? { ...doc, title: detail.title, updatedAt: detail.updatedAt } : doc))
+        syncTreeWithDocs(nextDocs)
+      }
+      return
+    }
+    if (viewMode === 'template') {
+      if (!activeTemplate) return
+      if (titleDraft.trim() === activeTemplate.name) return
+      await window.api.db.updateTemplate({
+        id: activeTemplate.id,
+        name: titleDraft.trim(),
+        content: activeTemplate.content,
+        folderId: activeTemplate.folderId ?? null,
+      })
+      const next = { ...activeTemplate, name: titleDraft.trim() }
+      setActiveTemplate(next)
+      const nextTemplates = templates.map((tpl) => (tpl.id === next.id ? { ...tpl, name: next.name } : tpl))
+      syncTreeWithTemplates(nextTemplates)
+    }
   }
 
   const applyCommand = (command: string, value?: string) => {
@@ -659,6 +816,32 @@ function App() {
     })
   }
 
+  const handleCreateTemplateFolder = async () => {
+    openDialog({
+      title: '新建模板文件夹',
+      inputLabel: '文件夹名称',
+      inputValue: '',
+      confirmText: '创建',
+      showInput: true,
+      onConfirm: async (value) => {
+        if (!value) return
+        const id = await window.api.db.createTemplateFolder({ name: value, parentId: activeTemplateFolderId })
+        if (!id) return
+        const newRow: TemplateFolderRow = {
+          id,
+          name: value,
+          parentId: activeTemplateFolderId,
+          sortOrder: Date.now(),
+        }
+        setTemplateFolderRows((prev) => {
+          const next = [...prev, newRow]
+          setTemplateFolders(buildTree(next, templates.map(toTemplateSummary)))
+          return next
+        })
+      },
+    })
+  }
+
   const openCreateMenu = (event: MouseEvent<HTMLElement>, folderId: number | null, mode?: 'submenu') => {
     const rect = event.currentTarget.getBoundingClientRect()
     if (folderId !== null) setActiveFolderId(folderId)
@@ -681,6 +864,27 @@ function App() {
         setFolderRows((prev) => {
           const next = prev.map((row) => (row.id === activeFolderId ? { ...row, name: value } : row))
           setFolders(buildTree(next, docs))
+          return next
+        })
+      },
+    })
+  }
+
+  const handleRenameTemplateFolder = async () => {
+    if (!activeTemplateFolderId) return
+    const current = templateFolderMap.get(activeTemplateFolderId)
+    openDialog({
+      title: '重命名模板文件夹',
+      inputLabel: '文件夹名称',
+      inputValue: current?.name ?? '',
+      confirmText: '保存',
+      showInput: true,
+      onConfirm: async (value) => {
+        if (!value) return
+        await window.api.db.renameTemplateFolder({ id: activeTemplateFolderId, name: value })
+        setTemplateFolderRows((prev) => {
+          const next = prev.map((row) => (row.id === activeTemplateFolderId ? { ...row, name: value } : row))
+          setTemplateFolders(buildTree(next, templates.map(toTemplateSummary)))
           return next
         })
       },
@@ -710,6 +914,30 @@ function App() {
     })
   }
 
+  const handleDeleteTemplateFolder = async () => {
+    if (!activeTemplateFolderId) return
+    const current = templateFolderMap.get(activeTemplateFolderId)
+    openDialog({
+      title: '删除模板文件夹',
+      message: `确定删除模板文件夹「${current?.name ?? ''}」及其子内容吗？`,
+      confirmText: '删除',
+      showInput: false,
+      onConfirm: async () => {
+        await window.api.db.deleteTemplateFolder(activeTemplateFolderId)
+        const idsToRemove = collectDescendantIds(templateFolderRows, activeTemplateFolderId)
+        setTemplateFolderRows((prev) => {
+          const next = prev.filter((row) => !idsToRemove.has(row.id))
+          const nextTemplates = templates.map((tpl) =>
+            idsToRemove.has(tpl.folderId ?? -1) ? { ...tpl, folderId: null } : tpl
+          )
+          syncTreeWithTemplates(nextTemplates, next)
+          return next
+        })
+        if (idsToRemove.has(activeTemplateFolderId)) setActiveTemplateFolderId(null)
+      },
+    })
+  }
+
   const handleMenuCreateDoc = async (folderId: number) => {
     openDialog({
       title: '新建文档',
@@ -728,6 +956,27 @@ function App() {
     })
   }
 
+  const handleCreateTemplate = async (folderId: number | null) => {
+    openDialog({
+      title: '新建模板',
+      inputLabel: '模板名称',
+      inputValue: '未命名模板',
+      confirmText: '创建',
+      showInput: true,
+      onConfirm: async (value) => {
+        if (!value) return
+        const id = await window.api.db.createTemplate({ name: value, content: '', folderId })
+        if (!id) return
+        const next = [
+          { id, name: value, content: '', updatedAt: new Date().toISOString(), folderId },
+          ...templates,
+        ]
+        syncTreeWithTemplates(next)
+        setActiveTemplate(next[0])
+      },
+    })
+  }
+
   const handleMenuCreateFromTemplate = async (folderId: number | null, template: TemplateRow) => {
     const detail = await window.api.db.createDoc({
       folderId,
@@ -741,11 +990,13 @@ function App() {
   }
 
   const handleOpenTemplatePanel = (folderId: number | null, mode: 'create' | 'manage') => {
-    setTemplatePanel({ folderId, mode })
+    const targetFolderId = viewMode === 'template' ? activeTemplateFolderId : folderId
+    setTemplatePanel({ folderId: targetFolderId ?? null, mode })
   }
 
   const handleSaveAsTemplate = async () => {
     if (!activeDoc) return
+    setTemplatePanel({ folderId: activeTemplateFolderId ?? null, mode: 'create' })
     setTemplateEditor({
       mode: 'create',
       name: activeDoc.title,
@@ -759,20 +1010,6 @@ function App() {
       id: template.id,
       name: template.name,
       content: template.content,
-    })
-  }
-
-  const handleDeleteTemplate = async (template: TemplateRow) => {
-    openDialog({
-      title: '删除模板',
-      message: `确定删除模板「${template.name}」吗？`,
-      confirmText: '删除',
-      showInput: false,
-      onConfirm: async () => {
-        await window.api.db.deleteTemplate(template.id)
-        const nextTemplates = await window.api.db.listTemplates()
-        setTemplates(nextTemplates)
-      },
     })
   }
 
@@ -790,16 +1027,21 @@ function App() {
     if (!templateEditor.name.trim()) return
     const content = templateEditorRef.current?.innerHTML ?? ''
     if (templateEditor.mode === 'create') {
-      await window.api.db.createTemplate({ name: templateEditor.name.trim(), content })
+      await window.api.db.createTemplate({
+        name: templateEditor.name.trim(),
+        content,
+        folderId: templatePanel?.folderId ?? activeTemplateFolderId,
+      })
     } else if (templateEditor.id) {
       await window.api.db.updateTemplate({
         id: templateEditor.id,
         name: templateEditor.name.trim(),
         content,
+        folderId: activeTemplateFolderId ?? null,
       })
     }
     const nextTemplates = await window.api.db.listTemplates()
-    setTemplates(nextTemplates)
+    syncTreeWithTemplates(nextTemplates)
     setTemplateEditor(null)
   }
 
@@ -841,6 +1083,30 @@ function App() {
     })
   }
 
+  const handleRenameTemplate = async () => {
+    if (!activeTemplate) return
+    openDialog({
+      title: '重命名模板',
+      inputLabel: '模板名称',
+      inputValue: activeTemplate.name,
+      confirmText: '保存',
+      showInput: true,
+      onConfirm: async (value) => {
+        if (!value) return
+        await window.api.db.updateTemplate({
+          id: activeTemplate.id,
+          name: value,
+          content: activeTemplate.content,
+          folderId: activeTemplate.folderId ?? null,
+        })
+        const next = { ...activeTemplate, name: value }
+        setActiveTemplate(next)
+        const nextTemplates = templates.map((tpl) => (tpl.id === next.id ? { ...tpl, name: next.name } : tpl))
+        syncTreeWithTemplates(nextTemplates)
+      },
+    })
+  }
+
   const handleDeleteDoc = async () => {
     if (!activeDoc) return
     openDialog({
@@ -863,6 +1129,46 @@ function App() {
         }
       },
     })
+  }
+
+  const handleDeleteTemplate = async () => {
+    if (!activeTemplate) return
+    openDialog({
+      title: '删除模板',
+      message: `确定删除模板「${activeTemplate.name}」吗？`,
+      confirmText: '删除',
+      showInput: false,
+      onConfirm: async () => {
+        await window.api.db.deleteTemplate(activeTemplate.id)
+        const nextTemplates = templates.filter((tpl) => tpl.id !== activeTemplate.id)
+        syncTreeWithTemplates(nextTemplates)
+        const nextInFolder = nextTemplates.find((tpl) =>
+          activeTemplateFolderId === null ? true : (tpl.folderId ?? null) === activeTemplateFolderId
+        )
+        setActiveTemplate(nextInFolder ?? null)
+      },
+    })
+  }
+
+  const handleCopyTemplate = async () => {
+    if (!activeTemplate) return
+    const id = await window.api.db.createTemplate({
+      name: `${activeTemplate.name}-副本`,
+      content: activeTemplate.content,
+      folderId: activeTemplate.folderId ?? null,
+    })
+    if (!id) return
+    const next = [
+      {
+        ...activeTemplate,
+        id,
+        name: `${activeTemplate.name}-副本`,
+        updatedAt: new Date().toISOString(),
+      },
+      ...templates,
+    ]
+    syncTreeWithTemplates(next)
+    setActiveTemplate(next[0])
   }
 
   const handleCopyDoc = async () => {
@@ -896,7 +1202,7 @@ function App() {
     try {
       await window.api.importTemplates()
       const next = await window.api.db.listTemplates()
-      setTemplates(next)
+      syncTreeWithTemplates(next)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       openDialog({
@@ -939,32 +1245,72 @@ function App() {
           </div>
 
           <div className='section'>
-            <div className='section-title'>我的文件夹</div>
+            <div className='section-title-row'>
+              <div className='section-title'>{viewMode === 'doc' ? '我的文档' : '我的模板'}</div>
+              <span
+                className='section-link'
+                onClick={() => setViewMode(viewMode === 'doc' ? 'template' : 'doc')}
+              >
+                {viewMode === 'doc' ? '切换模板' : '切换文档'}
+              </span>
+            </div>
             <div className='tree'>
-              <button className={`tree-row ${activeFolderId === null ? 'active' : ''}`} onClick={() => handleSelectFolder(null)}>
-                <span className='tree-dot' />
-                <span className='tree-icon' />
-                <span className='tree-name'>全部文档</span>
-              </button>
-              {renderTree(
-                folders,
-                0,
-                activeFolderId,
-                handleSelectFolder,
-                collapsedFolders,
-                handleToggleFolder,
-                (id, x, y) => {
-                  setActiveFolderId(id)
-                  setMenu({ folderId: id, x, y })
-                  setMenuSubOpen(false)
-                },
-                hoverFolderId,
-                setHoverFolderId,
-                handleSelectDoc,
-                activeDoc?.id ?? null,
-                (id, x, y) => {
-                  setDocMenu({ docId: id, x, y })
-                },
+              {viewMode === 'doc' ? (
+                <>
+                  <button className={`tree-row ${activeFolderId === null ? 'active' : ''}`} onClick={() => handleSelectFolder(null)}>
+                    <span className='tree-dot' />
+                    <span className='tree-icon' />
+                    <span className='tree-name'>全部文档</span>
+                  </button>
+                  {renderTree(
+                    folders,
+                    0,
+                    activeFolderId,
+                    handleSelectFolder,
+                    collapsedFolders,
+                    handleToggleFolder,
+                    (id, x, y) => {
+                      setActiveFolderId(id)
+                      setMenu({ folderId: id, x, y })
+                      setMenuSubOpen(false)
+                    },
+                    hoverFolderId,
+                    setHoverFolderId,
+                    handleSelectDoc,
+                    activeDoc?.id ?? null,
+                    (id, x, y) => {
+                      setDocMenu({ docId: id, x, y })
+                    },
+                  )}
+                </>
+              ) : (
+                <>
+                  <button className={`tree-row ${activeTemplateFolderId === null ? 'active' : ''}`} onClick={() => handleSelectTemplateFolder(null)}>
+                    <span className='tree-dot' />
+                    <span className='tree-icon' />
+                    <span className='tree-name'>全部模板</span>
+                  </button>
+                  {renderTree(
+                    templateFolders,
+                    0,
+                    activeTemplateFolderId,
+                    handleSelectTemplateFolder,
+                    collapsedTemplateFolders,
+                    handleToggleTemplateFolder,
+                    (id, x, y) => {
+                      setActiveTemplateFolderId(id)
+                      setMenu({ folderId: id, x, y })
+                      setMenuSubOpen(false)
+                    },
+                    hoverFolderId,
+                    setHoverFolderId,
+                    handleSelectTemplate,
+                    activeTemplate?.id ?? null,
+                    (id, x, y) => {
+                      setTemplateMenu({ docId: id, x, y })
+                    },
+                  )}
+                </>
               )}
             </div>
            {/*  <div className='folder-actions'>
@@ -1003,30 +1349,48 @@ function App() {
                 onChange={(event) => setTitleDraft(event.target.value)}
                 onBlur={handleTitleBlur}
                 placeholder='请输入标题'
-                disabled={!activeDoc}
+                disabled={viewMode === 'doc' ? !activeDoc : !activeTemplate}
               />
             </div>
             <div className='editor-title-right'>
-              <button className='tool emphasize' onClick={() => handleOpenTemplatePanel(activeFolderId, 'create')}>模板</button>
+              {viewMode === 'doc' ? (
+                <button className='tool emphasize' onClick={() => handleOpenTemplatePanel(activeFolderId, 'create')}>模板</button>
+              ) : (
+                <button className='tool emphasize' onClick={() => handleCreateTemplate(activeTemplateFolderId)}>新建模板</button>
+              )}
+              <span
+                className='link-toggle'
+                onClick={() => setViewMode(viewMode === 'doc' ? 'template' : 'doc')}
+              >
+                {viewMode === 'doc' ? '切换模板' : '切换文档'}
+              </span>
               <div className='editor-menu-wrap'>
                 <button className='tool' onClick={() => setEditorMenuOpen((prev) => !prev)}>•••</button>
                 {editorMenuOpen ? (
                   <div className='menu editor-menu'>
-                    <button className='menu-item' onClick={() => { setEditorMenuOpen(false); handleSaveAsTemplate() }} disabled={!activeDoc}>
-                      设为模板
-                    </button>
-                    <button className='menu-item' onClick={() => { setEditorMenuOpen(false); handleExport('pdf') }} disabled={!activeDoc}>
-                      导出 PDF
-                    </button>
-                    <button className='menu-item' onClick={() => { setEditorMenuOpen(false); handleExport('word') }} disabled={!activeDoc}>
-                      导出 Word
-                    </button>
-                    <button className='menu-item' onClick={() => { setEditorMenuOpen(false); handlePrint() }}>
-                      打印
-                    </button>
-                    <button className='menu-item danger' onClick={() => { setEditorMenuOpen(false); handleDeleteDoc() }} disabled={!activeDoc}>
-                      删除
-                    </button>
+                    {viewMode === 'doc' ? (
+                      <>
+                        <button className='menu-item' onClick={() => { setEditorMenuOpen(false); handleSaveAsTemplate() }} disabled={!activeDoc}>
+                          设为模板
+                        </button>
+                        <button className='menu-item' onClick={() => { setEditorMenuOpen(false); handleExport('pdf') }} disabled={!activeDoc}>
+                          导出 PDF
+                        </button>
+                        <button className='menu-item' onClick={() => { setEditorMenuOpen(false); handleExport('word') }} disabled={!activeDoc}>
+                          导出 Word
+                        </button>
+                        <button className='menu-item' onClick={() => { setEditorMenuOpen(false); handlePrint() }} disabled={!activeDoc}>
+                          打印
+                        </button>
+                        <button className='menu-item danger' onClick={() => { setEditorMenuOpen(false); handleDeleteDoc() }} disabled={!activeDoc}>
+                          删除
+                        </button>
+                      </>
+                    ) : (
+                      <button className='menu-item danger' onClick={() => { setEditorMenuOpen(false); handleDeleteTemplate() }} disabled={!activeTemplate}>
+                        删除模板
+                      </button>
+                    )}
                   </div>
                 ) : null}
           </div>
@@ -1183,14 +1547,28 @@ function App() {
               <button
                 className='menu-item'
                 disabled={menu.folderId === 0}
-                onClick={() => { setMenu(null); handleRenameFolder() }}
+                onClick={() => {
+                  setMenu(null)
+                  if (viewMode === 'doc') {
+                    handleRenameFolder()
+                  } else {
+                    handleRenameTemplateFolder()
+                  }
+                }}
               >
                 重命名
               </button>
               <button
                 className='menu-item danger'
                 disabled={menu.folderId === 0}
-                onClick={() => { setMenu(null); handleDeleteFolder() }}
+                onClick={() => {
+                  setMenu(null)
+                  if (viewMode === 'doc') {
+                    handleDeleteFolder()
+                  } else {
+                    handleDeleteTemplateFolder()
+                  }
+                }}
               >
                 删除
               </button>
@@ -1202,28 +1580,39 @@ function App() {
                   className='menu-item'
                   onClick={() => {
                     setMenu(null)
-                    const targetFolderId = menu.folderId === 0 ? activeFolderId : menu.folderId
-                    if (typeof targetFolderId === 'number') {
-                      handleMenuCreateDoc(targetFolderId)
+                    if (viewMode === 'doc') {
+                      const targetFolderId = menu.folderId === 0 ? activeFolderId : menu.folderId
+                      if (typeof targetFolderId === 'number') {
+                        handleMenuCreateDoc(targetFolderId)
+                      }
+                    } else {
+                      const targetFolderId = menu.folderId === 0 ? activeTemplateFolderId : menu.folderId
+                      handleCreateTemplate(typeof targetFolderId === 'number' ? targetFolderId : null)
                     }
                   }}
                 >
-                  空白文档
+                  {viewMode === 'doc' ? '空白文档' : '空白模板'}
                 </button>
+                {viewMode === 'doc' ? (
+                  <button
+                    className='menu-item'
+                    onClick={() => {
+                      setMenu(null)
+                      handleOpenTemplatePanel(menu.folderId === 0 ? activeFolderId : menu.folderId, 'create')
+                    }}
+                  >
+                    从模板新建
+                  </button>
+                ) : null}
                 <button
                   className='menu-item'
                   onClick={() => {
                     setMenu(null)
-                    handleOpenTemplatePanel(menu.folderId === 0 ? activeFolderId : menu.folderId, 'create')
-                  }}
-                >
-                  从模板新建
-                </button>
-                <button
-                  className='menu-item'
-                  onClick={() => {
-                    setMenu(null)
-                    handleCreateFolder()
+                    if (viewMode === 'doc') {
+                      handleCreateFolder()
+                    } else {
+                      handleCreateTemplateFolder()
+                    }
                   }}
                 >
                   文件夹
@@ -1272,6 +1661,44 @@ function App() {
         </>
       ) : null}
 
+      {templateMenu ? (
+        <>
+          <div className='menu-backdrop' onClick={() => setTemplateMenu(null)} />
+          <div className='menu doc-menu' style={{ top: templateMenu.y, left: templateMenu.x }}>
+            <button
+              className='menu-item'
+              onClick={async () => {
+                setTemplateMenu(null)
+                handleSelectTemplate(templateMenu.docId)
+                await handleRenameTemplate()
+              }}
+            >
+              重命名
+            </button>
+            <button
+              className='menu-item'
+              onClick={async () => {
+                setTemplateMenu(null)
+                handleSelectTemplate(templateMenu.docId)
+                await handleCopyTemplate()
+              }}
+            >
+              复制
+            </button>
+            <button
+              className='menu-item danger'
+              onClick={async () => {
+                setTemplateMenu(null)
+                handleSelectTemplate(templateMenu.docId)
+                await handleDeleteTemplate()
+              }}
+            >
+              删除
+            </button>
+          </div>
+        </>
+      ) : null}
+
       {templatePanel ? (
         <div className='panel-backdrop' onClick={() => setTemplatePanel(null)}>
           <div className='panel' onClick={(event) => event.stopPropagation()}>
@@ -1301,7 +1728,7 @@ function App() {
                     ) : (
                       <>
                         <button className='ghost' onClick={() => handleEditTemplate(tpl)}>编辑</button>
-                        <button className='ghost danger' onClick={() => handleDeleteTemplate(tpl)}>删除</button>
+                        <button className='ghost danger' onClick={() => handleDeleteTemplate()}>删除</button>
                       </>
                     )}
                   </div>
