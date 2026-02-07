@@ -2,6 +2,7 @@ export type FolderNode = {
   id: number
   name: string
   parentId: number | null
+  sortOrder: number
   children: FolderNode[]
   docs: DocSummary[]
 }

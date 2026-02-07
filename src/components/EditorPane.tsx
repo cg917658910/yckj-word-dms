@@ -22,6 +22,7 @@ type Props = {
   formatDate: (value: string) => string
   value: string
   onChange: (value: string) => void
+  editorStyle: string
 }
 
 const EditorPane = ({
@@ -43,6 +44,7 @@ const EditorPane = ({
   formatDate,
   value,
   onChange,
+  editorStyle,
 }: Props) => (
   <section className='editor'>
     <div className='editor-toolbar'>
@@ -104,6 +106,7 @@ const EditorPane = ({
 
     <div className='editor-canvas'>
       <div className='editor-paper'>
+        {editorStyle ? <style dangerouslySetInnerHTML={{ __html: editorStyle }} /> : null}
         <CKEditor
           editor={ClassicEditor as unknown as any}
           data={value}

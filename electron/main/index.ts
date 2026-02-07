@@ -296,6 +296,9 @@ ipcMain.handle('template:upload-files', async (_event, payload?: { folderId?: nu
     const base = pathMod.basename(filePath, ext)
     const html = await toHtmlFromFile(filePath)
     if (!html) continue
+    // 把上传处理后的html 保存为本地文件，方便调试
+    const debugPath = pathMod.join('./tmp', `import_${base}.html`)
+    await import('node:fs/promises').then(fs => fs.writeFile(debugPath, html, 'utf8'))
     await createTemplate({ name: base, content: html, folderId: payload?.folderId ?? null })
   }
   } catch (error) {

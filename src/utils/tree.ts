@@ -12,7 +12,14 @@ export const buildTree = (rows: FolderRow[], docs: DocSummary[]): FolderNode[] =
   })
 
   rows.forEach((row) => {
-    map.set(row.id, { id: row.id, name: row.name, parentId: row.parentId, children: [], docs: [] })
+    map.set(row.id, {
+      id: row.id,
+      name: row.name,
+      parentId: row.parentId,
+      sortOrder: row.sortOrder,
+      children: [],
+      docs: [],
+    })
   })
 
   rows.forEach((row) => {
@@ -37,7 +44,10 @@ export const buildTree = (rows: FolderRow[], docs: DocSummary[]): FolderNode[] =
   })
 
   const sortTree = (nodes: FolderNode[]) => {
-    nodes.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+    nodes.sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder
+      return a.name.localeCompare(b.name, 'zh-CN')
+    })
     nodes.forEach((child) => sortTree(child.children))
   }
   sortTree(roots)

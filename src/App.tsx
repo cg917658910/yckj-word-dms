@@ -30,6 +30,7 @@ function App() {
   const [hoverFolderId, setHoverFolderId] = useState<number | null>(null)
   const [titleDraft, setTitleDraft] = useState('')
   const [editorHtml, setEditorHtml] = useState('')
+  const [editorStyle, setEditorStyle] = useState('')
   const [editorMenuOpen, setEditorMenuOpen] = useState(false)
   const [findReplaceOpen, setFindReplaceOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'doc' | 'template'>('doc')
@@ -140,17 +141,34 @@ function App() {
     boot()
   }, [])
 
+  const extractImportedStyle = (html: string) => {
+    if (!html) return { html: '', css: '' }
+    const styles: string[] = []
+    const cleaned = html.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (_match, css) => {
+      if (css && typeof css === 'string') styles.push(css)
+      return ''
+    })
+    return { html: cleaned.trim(), css: styles.join('\n').trim() }
+  }
+
+  const composeWithStyle = (html: string, css: string) =>
+    css ? `<style data-imported="true">${css}</style>${html}` : html
+
   useEffect(() => {
     if (viewMode !== 'doc') return
     if (!activeDoc) return
-    setEditorHtml(activeDoc.content || '')
+    const parsed = extractImportedStyle(activeDoc.content || '')
+    setEditorStyle(parsed.css)
+    setEditorHtml(parsed.html)
     setTitleDraft(activeDoc.title)
   }, [activeDoc, viewMode])
 
   useEffect(() => {
     if (viewMode !== 'template') return
     if (!activeTemplate) return
-    setEditorHtml(activeTemplate.content || '')
+    const parsed = extractImportedStyle(activeTemplate.content || '')
+    setEditorStyle(parsed.css)
+    setEditorHtml(parsed.html)
     setTitleDraft(activeTemplate.name)
   }, [activeTemplate, viewMode])
 
@@ -165,10 +183,11 @@ function App() {
   const handleSave = async () => {
     if (viewMode === 'doc') {
       if (!activeDoc) return
+      const content = composeWithStyle(editorHtml, editorStyle)
       const next = await window.api.db.saveDoc({
         id: activeDoc.id,
         title: titleDraft.trim() || activeDoc.title,
-        content: editorHtml,
+        content,
       })
       setActiveDoc(next)
       if (next) {
@@ -184,7 +203,7 @@ function App() {
       const next = {
         ...activeTemplate,
         name: titleDraft.trim() || activeTemplate.name,
-        content: editorHtml,
+        content: composeWithStyle(editorHtml, editorStyle),
       }
       await window.api.db.updateTemplate({
         id: activeTemplate.id,
@@ -270,7 +289,7 @@ function App() {
     setTemplateEditor({
       mode: 'create',
       name: activeDoc.title,
-      content: editorHtml,
+      content: composeWithStyle(editorHtml, editorStyle),
     })
   }
 
@@ -280,7 +299,7 @@ function App() {
 
   const handleExport = async (format: 'pdf' | 'word' | 'html') => {
     if (!activeDoc) return
-    const content = editorHtml
+    const content = composeWithStyle(editorHtml, editorStyle)
     await window.api.exportDoc({
       title: titleDraft.trim() || activeDoc.title,
       content,
@@ -449,26 +468,27 @@ function App() {
         </div>
       </aside>
 
-      <EditorPane
-        viewMode={viewMode}
-        titleDraft={titleDraft}
-        onTitleChange={setTitleDraft}
-        onTitleBlur={handleTitleBlur}
-        canEditTitle={viewMode === 'doc' ? !!activeDoc : !!activeTemplate}
-        editorMenuOpen={editorMenuOpen}
-        onToggleEditorMenu={() => setEditorMenuOpen((prev) => !prev)}
-        onCloseEditorMenu={() => setEditorMenuOpen(false)}
-        onSaveAsTemplate={handleSaveAsTemplate}
-        onExport={(format) => handleExport(format)}
-        onPrint={handlePrint}
-        onDeleteDoc={handleDeleteDoc}
-        onDeleteTemplate={handleDeleteTemplate}
-        activeDoc={activeDoc}
-        activeTemplate={activeTemplate}
-        formatDate={formatDate}
-        value={editorHtml}
-        onChange={setEditorHtml}
-      />
+        <EditorPane
+          viewMode={viewMode}
+          titleDraft={titleDraft}
+          onTitleChange={setTitleDraft}
+          onTitleBlur={handleTitleBlur}
+          canEditTitle={viewMode === 'doc' ? !!activeDoc : !!activeTemplate}
+          editorMenuOpen={editorMenuOpen}
+          onToggleEditorMenu={() => setEditorMenuOpen((prev) => !prev)}
+          onCloseEditorMenu={() => setEditorMenuOpen(false)}
+          onSaveAsTemplate={handleSaveAsTemplate}
+          onExport={(format) => handleExport(format)}
+          onPrint={handlePrint}
+          onDeleteDoc={handleDeleteDoc}
+          onDeleteTemplate={handleDeleteTemplate}
+          activeDoc={activeDoc}
+          activeTemplate={activeTemplate}
+          formatDate={formatDate}
+          value={editorHtml}
+          onChange={setEditorHtml}
+          editorStyle={editorStyle}
+        />
 
       {dialog ? (
         <div className='modal-backdrop' onClick={closeDialog}>
@@ -616,8 +636,6 @@ function App() {
 }
 
 export default App
-
-
 
 
 
