@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { importTemplates, registerDbIpc, createTemplateFolder, createTemplate, listTemplateFolders } from './db'
+import { createTemplate, createTemplateFolder, importTemplates, listTemplateFolders, registerDbIpc } from './db'
 //import { update } from './update'
 
 const require = createRequire(import.meta.url)
@@ -253,11 +253,11 @@ ipcMain.handle('template:import', async () => {
         const data = await pdfParse(buffer)
         const html = `<p>${data.text.replace(/\n+/g, '<br/>')}</p>`
         items.push({ name: base, content: html })
-      } else if (ext === '.doc') {
+      }/*  else if (ext === '.doc') {
       const buffer = await fs.readFile(filePath) // Buffer
       const html = `<p>已导入 Word 文档（.doc），请手动校对格式。</p><pre>${buffer.toString('base64').slice(0, 200)}...</pre>`
       items.push({ name: base, content: html })
-    }
+    } */
   }
 
   if (!items.length) return false
@@ -302,10 +302,6 @@ const toHtmlFromFile = async (filePath: string) => {
     const data = await pdfParse(buffer)
     return `<p>${data.text.replace(/\n+/g, '<br/>')}</p>`
   }
-  if (ext === '.doc') {
-    const buffer = await fs.readFile(filePath)
-    return `<p>已导入 Word 文档（.doc），请手动校对格式。</p><pre>${buffer.toString('base64').slice(0, 200)}...</pre>`
-  }
   return ''
 }
 
@@ -319,7 +315,7 @@ ipcMain.handle('template:upload-files', async (_event, payload?: { folderId?: nu
   const pathMod = await import('node:path')
   for (const filePath of filePaths) {
     const ext = pathMod.extname(filePath).toLowerCase()
-    if (!['.pdf', '.docx', '.doc'].includes(ext)) continue
+    if (!['.pdf', '.docx'].includes(ext)) continue
     const base = pathMod.basename(filePath, ext)
     const html = await toHtmlFromFile(filePath)
     if (!html) continue
@@ -358,7 +354,7 @@ ipcMain.handle('template:upload-folder', async (_event, payload?: { folderId?: n
         await walk(root, abs, nextId)
       } else {
         const ext = pathMod.extname(entry.name).toLowerCase()
-        if (!['.pdf', '.docx', '.doc'].includes(ext)) continue
+        if (!['.pdf', '.docx'].includes(ext)) continue
         const base = pathMod.basename(entry.name, ext)
         const html = await toHtmlFromFile(abs)
         if (!html) continue

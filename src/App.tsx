@@ -327,6 +327,7 @@ function App() {
   const [findQuery, setFindQuery] = useState('')
   const [lineHeight, setLineHeight] = useState('1.9')
   const [viewMode, setViewMode] = useState<'doc' | 'template'>('doc')
+  const [templatePickId, setTemplatePickId] = useState<number | null>(null)
 
   const syncTreeWithDocs = (nextDocs: DocSummary[], nextRows = folderRows) => {
     setDocs(nextDocs)
@@ -989,6 +990,12 @@ function App() {
     setActiveDoc(detail)
   }
 
+  const handleCreateDocFromTemplateId = async (templateId: number) => {
+    const tpl = templates.find((item) => item.id === templateId)
+    if (!tpl) return
+    await handleMenuCreateFromTemplate(templatePanel?.folderId ?? null, tpl)
+  }
+
   const handleOpenTemplatePanel = (folderId: number | null, mode: 'create' | 'manage') => {
     const targetFolderId = viewMode === 'template' ? activeTemplateFolderId : folderId
     setTemplatePanel({ folderId: targetFolderId ?? null, mode })
@@ -1242,14 +1249,14 @@ function App() {
         <div className='sidebar-scroll'>
           <div className='section'>
             <div className='section-title'>快捷工具</div>
-            <div className='quick-item clickable' onClick={(event) => openCreateMenu(event, activeFolderId, 'submenu')}>
+            {/* <div className='quick-item clickable' onClick={(event) => openCreateMenu(event, activeFolderId, 'submenu')}>
               <span className='quick-icon'>＋</span>
               新建
             </div>
             <div className='quick-item clickable' onClick={() => handleOpenTemplatePanel(activeFolderId, 'create')}>
               <span className='quick-icon'>▦</span>
               模板
-            </div>
+            </div> */}
             <div className='quick-item clickable' onClick={() => setFindReplaceOpen(true)}>
               <span className='quick-icon'>⌕</span>
               查找替换
@@ -1269,7 +1276,15 @@ function App() {
             <div className='tree'>
               {viewMode === 'doc' ? (
                 <>
-                  <button className={`tree-row ${activeFolderId === null ? 'active' : ''}`} onClick={() => handleSelectFolder(null)}>
+                  <button
+                    className={`tree-row ${activeFolderId === null ? 'active' : ''}`}
+                    onClick={() => handleSelectFolder(null)}
+                    onContextMenu={(event) => {
+                      event.preventDefault()
+                      setMenu({ folderId: 0, x: event.clientX, y: event.clientY })
+                      setMenuSubOpen(false)
+                    }}
+                  >
                     <span className='tree-dot' />
                     <span className='tree-icon' />
                     <span className='tree-name'>全部文档</span>
@@ -1297,7 +1312,15 @@ function App() {
                 </>
               ) : (
                 <>
-                  <button className={`tree-row ${activeTemplateFolderId === null ? 'active' : ''}`} onClick={() => handleSelectTemplateFolder(null)}>
+                  <button
+                    className={`tree-row ${activeTemplateFolderId === null ? 'active' : ''}`}
+                    onClick={() => handleSelectTemplateFolder(null)}
+                    onContextMenu={(event) => {
+                      event.preventDefault()
+                      setMenu({ folderId: 0, x: event.clientX, y: event.clientY })
+                      setMenuSubOpen(false)
+                    }}
+                  >
                     <span className='tree-dot' />
                     <span className='tree-icon' />
                     <span className='tree-name'>全部模板</span>
@@ -1325,25 +1348,6 @@ function App() {
                 </>
               )}
             </div>
-           {/*  <div className='folder-actions'>
-              <button className='ghost' onClick={(event) => openCreateMenu(event, activeFolderId)}>新建</button>
-              <button className='ghost' onClick={handleRenameFolder} disabled={!activeFolderId}>重命名</button>
-              <button className='ghost danger' onClick={handleDeleteFolder} disabled={!activeFolderId}>删除</button>
-            </div> */}
-          </div>
-
-          <div className='section'>
-            <div className='section-title-row'>
-              <div className='section-title'>最近模板</div>
-              <button className='ghost small' onClick={() => handleOpenTemplatePanel(null, 'manage')}>管理</button>
-            </div>
-            <div className='template-grid'>
-              {recentTemplates.map((item) => (
-                <button key={item.id} className='template-pill' onClick={() => handleMenuCreateFromTemplate(activeFolderId, item)}>
-                  {item.name}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       </aside>
@@ -1354,7 +1358,6 @@ function App() {
         <div className='editor-toolbar'>
           <div className='editor-title-bar'>
             <div className='editor-title-left'>
-              <button className='tool dot-btn'>•••</button>
               <input
                 className='doc-title-input'
                 value={titleDraft}
@@ -1365,17 +1368,17 @@ function App() {
               />
             </div>
             <div className='editor-title-right'>
-              {viewMode === 'doc' ? (
+             {/*  {viewMode === 'doc' ? (
                 <button className='tool emphasize' onClick={() => handleOpenTemplatePanel(activeFolderId, 'create')}>模板</button>
               ) : (
                 <button className='tool emphasize' onClick={() => handleCreateTemplate(activeTemplateFolderId)}>新建模板</button>
-              )}
-              <span
+              )} */}
+             {/*  <span
                 className='link-toggle'
                 onClick={() => setViewMode(viewMode === 'doc' ? 'template' : 'doc')}
               >
                 {viewMode === 'doc' ? '切换模板' : '切换文档'}
-              </span>
+              </span> */}
               <div className='editor-menu-wrap'>
                 <button className='tool' onClick={() => setEditorMenuOpen((prev) => !prev)}>•••</button>
                 {editorMenuOpen ? (
@@ -1740,7 +1743,7 @@ function App() {
         <div className='panel-backdrop' onClick={() => setTemplatePanel(null)}>
           <div className='panel' onClick={(event) => event.stopPropagation()}>
             <div className='panel-header'>
-              <div className='panel-title'>最近模板</div>
+              <div className='panel-title'>我的模板</div>
               <button className='ghost' onClick={() => setTemplatePanel(null)}>关闭</button>
             </div>
             <div className='panel-body'>
@@ -1751,27 +1754,74 @@ function App() {
                   onChange={(event) => setTemplateSearch(event.target.value)}
                 />
               </div>
-              {filteredTemplates.length ? filteredTemplates.map((tpl) => (
-                <div key={tpl.id} className='panel-row'>
-                  <div>
-                    <div className='panel-name'>{tpl.name}</div>
-                    <div className='panel-date'>{formatDate(tpl.updatedAt)}</div>
+              {templatePanel.mode === 'create' ? (
+                <div className='panel-template-select'>
+                  <div className='panel-tree'>
+                    <button className={`tree-row ${activeTemplateFolderId === null ? 'active' : ''}`} onClick={() => handleSelectTemplateFolder(null)}>
+                      <span className='tree-dot' />
+                      <span className='tree-icon' />
+                      <span className='tree-name'>全部模板</span>
+                    </button>
+                    {renderTree(
+                      templateFolders,
+                      0,
+                      activeTemplateFolderId,
+                      handleSelectTemplateFolder,
+                      collapsedTemplateFolders,
+                      handleToggleTemplateFolder,
+                      () => {},
+                      hoverFolderId,
+                      setHoverFolderId,
+                      (id) => setTemplatePickId(id),
+                      null,
+                      () => {},
+                    )}
                   </div>
-                  <div className='panel-actions'>
-                    {templatePanel.mode === 'create' ? (
-                      <button className='ghost' onClick={() => { setTemplatePanel(null); handleMenuCreateFromTemplate(templatePanel.folderId ?? null, tpl) }}>
-                        使用
-                      </button>
-                    ) : (
+                  <div className='panel-preview'>
+                    {templatePickId ? (
                       <>
-                        <button className='ghost' onClick={() => handleEditTemplate(tpl)}>编辑</button>
-                        <button className='ghost danger' onClick={() => handleDeleteTemplate()}>删除</button>
+                        <div className='panel-preview-title'>
+                          {templates.find((tpl) => tpl.id === templatePickId)?.name ?? '模板预览'}
+                        </div>
+                        <div
+                          className='panel-preview-body'
+                          dangerouslySetInnerHTML={{
+                            __html: templates.find((tpl) => tpl.id === templatePickId)?.content ?? '',
+                          }}
+                        />
+                        <button
+                          className='primary'
+                          onClick={() => {
+                            handleCreateDocFromTemplateId(templatePickId)
+                            setTemplatePanel(null)
+                            setTemplatePickId(null)
+                          }}
+                        >
+                          使用该模板
+                        </button>
                       </>
+                    ) : (
+                      <div className='panel-empty'>请选择左侧模板进行预览</div>
                     )}
                   </div>
                 </div>
-              )) : (
-                <div className='panel-empty'>暂无模板</div>
+              ) : (
+                <>
+                  {filteredTemplates.length ? filteredTemplates.map((tpl) => (
+                    <div key={tpl.id} className='panel-row'>
+                      <div>
+                        <div className='panel-name'>{tpl.name}</div>
+                        <div className='panel-date'>{formatDate(tpl.updatedAt)}</div>
+                      </div>
+                      <div className='panel-actions'>
+                        <button className='ghost' onClick={() => handleEditTemplate(tpl)}>编辑</button>
+                        <button className='ghost danger' onClick={() => handleDeleteTemplate()}>删除</button>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className='panel-empty'>暂无模板</div>
+                  )}
+                </>
               )}
             </div>
             {templatePanel.mode === 'manage' ? (
