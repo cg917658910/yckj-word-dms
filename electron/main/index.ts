@@ -142,6 +142,8 @@ ipcMain.handle('doc:print', async (event) => {
 })
 
 ipcMain.handle('doc:export', async (event, payload: { title: string; content: string; format: 'pdf' | 'word' | 'html' }) => {
+  const normalizeHtml = (input: string) => input.replace(/\u00a0/g, '&nbsp;')
+  const bodyHtml = normalizeHtml(payload.content || '')
   const html = `<!doctype html>
 <html>
 <head>
@@ -154,7 +156,7 @@ ipcMain.handle('doc:export', async (event, payload: { title: string; content: st
     img { max-width: 100%; }
   </style>
 </head>
-<body>${payload.content}</body>
+<body>${bodyHtml}</body>
 </html>`
 
   if (payload.format === 'html') {
@@ -213,6 +215,15 @@ ipcMain.handle('doc:export', async (event, payload: { title: string; content: st
   return true
 })
 
+const extractHtmlBody = (html: string) => {
+  const styleMatches = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)]
+  const styles = styleMatches.map((match) => match[1]).join('\n').trim()
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+  const body = bodyMatch ? bodyMatch[1] : html
+  const styleTag = styles ? `<style data-imported="true">${styles}</style>` : ''
+  return `${styleTag}${body}`
+}
+
 const toHtmlFromFile = async (filePath: string) => {
   const fs = await import('node:fs/promises')
   const pathMod = await import('node:path')
@@ -227,9 +238,9 @@ const toHtmlFromFile = async (filePath: string) => {
     const charset = raw.includes('gb') ? 'gbk' : raw
     try {
       const iconv = require('iconv-lite') as { decode: (buf: Buffer, enc: string) => string }
-      return iconv.decode(buffer, charset)
+      return extractHtmlBody(iconv.decode(buffer, charset))
     } catch {
-      return buffer.toString('utf8')
+      return extractHtmlBody(buffer.toString('utf8'))
     }
   }
   if (ext === '.docx') {
@@ -346,4 +357,6 @@ ipcMain.handle('template:upload-folder', async (_event, payload?: { folderId?: n
   }
   return true
 })
+
+
 

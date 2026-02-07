@@ -77,6 +77,7 @@ function App() {
     handleRenameFolder,
     handleDeleteFolder,
     handleMenuCreateDoc,
+    handleCreateDoc,
     handleRenameDoc,
     handleDeleteDoc,
     handleCopyDoc,
@@ -305,7 +306,11 @@ function App() {
   const handleDocMenuCreateBlank = () => {
     handleFolderMenuClose()
     const targetFolderId = menu?.folderId === 0 ? activeFolderId : menu?.folderId
-    if (typeof targetFolderId === 'number') handleMenuCreateDoc(targetFolderId)
+    if (typeof targetFolderId === 'number') {
+      handleMenuCreateDoc(targetFolderId)
+    } else {
+      handleCreateDoc()
+    }
   }
 
   const handleDocMenuCreateFromTemplate = () => {
