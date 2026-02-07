@@ -32,7 +32,7 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0)
 }
 // 修改此日期控制试用期 本地时间为准
-const end = new Date(2026, 1, 7, 0, 0, 0) // 月份从 0 开始：6 = 7月
+const end = new Date(2026, 1, 8, 0, 0, 0) // 月份从 0 开始：6 = 7月
 if (new Date() > end) {
   dialog.showErrorBox('试用期已结束', '感谢您使用本软件，如需继续使用请联系开发者。')
   app.quit()
