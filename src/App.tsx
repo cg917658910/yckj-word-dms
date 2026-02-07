@@ -277,13 +277,13 @@ function App() {
     await window.api.print()
   }
 
-  const handleExport = async (format: 'pdf' | 'word') => {
+  const handleExport = async (format: 'pdf' | 'word' | 'html') => {
     if (!activeDoc) return
     const content = editorHtml
     await window.api.exportDoc({
       title: titleDraft.trim() || activeDoc.title,
       content,
-      format,
+        format,
     })
   }
 

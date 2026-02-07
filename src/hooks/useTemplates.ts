@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   DialogState,
   DocDetail,
@@ -16,6 +16,7 @@ type Options = {
 }
 
 export const useTemplates = ({ openDialog }: Options) => {
+  const refreshTokenRef = useRef(0)
   const [templateFolderRows, setTemplateFolderRows] = useState<TemplateFolderRow[]>([])
   const [templateFolders, setTemplateFolders] = useState<FolderNode[]>([])
   const [templates, setTemplates] = useState<TemplateRow[]>([])
@@ -39,8 +40,10 @@ export const useTemplates = ({ openDialog }: Options) => {
   }
 
   const refreshTemplateFolders = async (templateList?: TemplateRow[], preserveCollapsed = true) => {
+    const token = ++refreshTokenRef.current
     const rows = await window.api.db.listTemplateFolders()
     const list = templateList ?? (await window.api.db.listTemplates())
+    if (token !== refreshTokenRef.current) return
     setTemplateFolderRows(rows)
     setTemplates(list)
     setTemplateFolders(buildTree(rows, list.map(toTemplateSummary)))
@@ -96,11 +99,12 @@ export const useTemplates = ({ openDialog }: Options) => {
     openDialog({
       title: '新建模板文件夹',
       inputLabel: '文件夹名称',
-      inputValue: '',
+      inputValue: '新建文件夹',
       confirmText: '创建',
       showInput: true,
       onConfirm: async (value) => {
         if (!value) return
+        refreshTokenRef.current += 1
         const id = await window.api.db.createTemplateFolder({ name: value, parentId: activeTemplateFolderId })
         if (!id) return
         const newRow: TemplateFolderRow = {
@@ -433,3 +437,5 @@ export const useTemplates = ({ openDialog }: Options) => {
     handleTemplateMenuDelete,
   }
 }
+
+

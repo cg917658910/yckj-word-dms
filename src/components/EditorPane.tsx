@@ -13,7 +13,7 @@ type Props = {
   onToggleEditorMenu: () => void
   onCloseEditorMenu: () => void
   onSaveAsTemplate: () => void
-  onExport: (format: 'pdf' | 'word') => void
+  onExport: (format: 'pdf' | 'word' | 'html') => void
   onPrint: () => void
   onDeleteDoc: () => void
   onDeleteTemplate: () => void
@@ -72,6 +72,9 @@ const EditorPane = ({
                     </button>
                     <button className='menu-item' onClick={() => { onCloseEditorMenu(); onExport('word') }} disabled={!activeDoc}>
                       导出 Word
+                    </button>
+                    <button className='menu-item' onClick={() => { onCloseEditorMenu(); onExport('html') }} disabled={!activeDoc}>
+                      导出 HTML
                     </button>
                     <button className='menu-item' onClick={() => { onCloseEditorMenu(); onPrint() }} disabled={!activeDoc}>
                       打印
@@ -143,4 +146,3 @@ const EditorPane = ({
 )
 
 export default EditorPane
-

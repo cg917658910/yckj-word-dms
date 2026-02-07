@@ -40,7 +40,7 @@ interface Window {
   ipcRenderer: import('electron').IpcRenderer
   api: {
     print: () => Promise<boolean>
-    exportDoc: (payload: { title: string; content: string; format: 'pdf' | 'word' }) => Promise<boolean>
+    exportDoc: (payload: { title: string; content: string; format: 'pdf' | 'word' | 'html' }) => Promise<boolean>
     importTemplates: () => Promise<boolean>
     uploadTemplateFiles: (folderId?: number | null) => Promise<boolean>
     uploadTemplateFolder: (folderId?: number | null) => Promise<boolean>

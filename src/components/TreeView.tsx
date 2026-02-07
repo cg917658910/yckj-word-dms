@@ -33,7 +33,7 @@ const renderTree = (
   onDocMenu: (id: number, x: number, y: number) => void,
 ) =>
   nodes.map((node) => {
-    const hasToggle = node.children.length || node.docs.length
+    const hasToggle = true
     return (
       <div key={`${node.id}-${depth}`} className='tree-node' style={{ '--depth': depth } as CSSProperties}>
         <div
@@ -51,19 +51,15 @@ const renderTree = (
               if (hasToggle) onToggle(node.id)
             }}
           >
-            {hasToggle ? (
-              <span
-                className='tree-toggle'
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onToggle(node.id)
-                }}
-              >
-                {collapsed.has(node.id) ? '+' : '-'}
-              </span>
-            ) : (
-              <span />
-            )}
+            <span
+              className='tree-toggle'
+              onClick={(event) => {
+                event.stopPropagation()
+                onToggle(node.id)
+              }}
+            >
+              {collapsed.has(node.id) ? '+' : '-'}
+            </span>
             <span className='tree-icon' />
             <span className='tree-name'>{node.name}</span>
           </button>
@@ -134,6 +130,19 @@ const TreeView = ({
       <span className='tree-icon' />
       <span className='tree-name'>{rootLabel}</span>
     </button>
+    {renderTree(
+      nodes,
+      0,
+      selectedFolderId,
+      collapsed,
+      onToggle,
+      onFolderMenu,
+      hoverId,
+      setHoverId,
+      onSelectDoc,
+      activeDocId,
+      onDocMenu,
+    )}
     {rootDocs && rootDocs.length ? (
       <div className='tree-docs'>
         {rootDocs.map((doc) => (
@@ -152,19 +161,6 @@ const TreeView = ({
         ))}
       </div>
     ) : null}
-    {renderTree(
-      nodes,
-      0,
-      selectedFolderId,
-      collapsed,
-      onToggle,
-      onFolderMenu,
-      hoverId,
-      setHoverId,
-      onSelectDoc,
-      activeDocId,
-      onDocMenu,
-    )}
   </div>
 )
 

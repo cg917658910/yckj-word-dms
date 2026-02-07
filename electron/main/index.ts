@@ -141,7 +141,7 @@ ipcMain.handle('doc:print', async (event) => {
   })
 })
 
-ipcMain.handle('doc:export', async (event, payload: { title: string; content: string; format: 'pdf' | 'word' }) => {
+ipcMain.handle('doc:export', async (event, payload: { title: string; content: string; format: 'pdf' | 'word' | 'html' }) => {
   const html = `<!doctype html>
 <html>
 <head>
@@ -157,6 +157,17 @@ ipcMain.handle('doc:export', async (event, payload: { title: string; content: st
 <body>${payload.content}</body>
 </html>`
 
+  if (payload.format === 'html') {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: '导出 HTML',
+      defaultPath: `${payload.title}.html`,
+      filters: [{ name: 'HTML 文件', extensions: ['html'] }],
+    })
+    if (canceled || !filePath) return false
+    const fs = await import('node:fs/promises')
+    await fs.writeFile(filePath, html, 'utf8')
+    return true
+  }
   if (payload.format === 'pdf') {
     const { canceled, filePath } = await dialog.showSaveDialog({
       title: '导出 PDF',
@@ -207,7 +218,19 @@ const toHtmlFromFile = async (filePath: string) => {
   const pathMod = await import('node:path')
   const ext = pathMod.extname(filePath).toLowerCase()
   if (ext === '.html' || ext === '.htm') {
-    return fs.readFile(filePath, 'utf8')
+    const buffer = await fs.readFile(filePath)
+    const head = buffer.slice(0, 4096).toString('ascii')
+    const match =
+      head.match(/charset\\s*=\\s*["']?([^"'>\\s]+)/i) ||
+      head.match(/content-type[^>]*charset=([^"'>\\s]+)/i)
+    const raw = (match?.[1] || 'utf-8').toLowerCase()
+    const charset = raw.includes('gb') ? 'gbk' : raw
+    try {
+      const iconv = require('iconv-lite') as { decode: (buf: Buffer, enc: string) => string }
+      return iconv.decode(buffer, charset)
+    } catch {
+      return buffer.toString('utf8')
+    }
   }
   if (ext === '.docx') {
     const mammoth = await import('mammoth')

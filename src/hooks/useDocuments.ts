@@ -1,4 +1,4 @@
-import { Fragment, createElement, useMemo, useState } from 'react'
+﻿import { Fragment, createElement, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DialogState, DocDetail, DocMenuState, DocSummary, FolderNode, FolderRow } from '../types'
 import { buildTree, collectDescendantIds, collectDescendantsOnly, stripHtml, toDocSummary } from '../utils/tree'
@@ -8,6 +8,7 @@ type Options = {
 }
 
 export const useDocuments = ({ openDialog }: Options) => {
+  const refreshTokenRef = useRef(0)
   const [folderRows, setFolderRows] = useState<FolderRow[]>([])
   const [folders, setFolders] = useState<FolderNode[]>([])
   const [docs, setDocs] = useState<DocSummary[]>([])
@@ -27,8 +28,10 @@ export const useDocuments = ({ openDialog }: Options) => {
   }
 
   const refreshFolders = async (docList?: DocSummary[], preserveCollapsed = true) => {
+    const token = ++refreshTokenRef.current
     const rows = await window.api.db.listFolders()
     const list = docList ?? (await window.api.db.listDocs(null))
+    if (token !== refreshTokenRef.current) return
     setFolderRows(rows)
     setFolders(buildTree(rows, list))
     const folderWithDocs = new Set<number>()
@@ -116,11 +119,12 @@ export const useDocuments = ({ openDialog }: Options) => {
     openDialog({
       title: '新建文件夹',
       inputLabel: '文件夹名称',
-      inputValue: '',
+      inputValue: '新建文件夹',
       confirmText: '创建',
       showInput: true,
       onConfirm: async (value) => {
         if (!value) return
+        refreshTokenRef.current += 1
         const id = await window.api.db.createFolder({ name: value, parentId: activeFolderId })
         if (!id) return
         const newRow: FolderRow = {
@@ -354,3 +358,6 @@ export const useDocuments = ({ openDialog }: Options) => {
     handleDocMenuDelete,
   }
 }
+
+
+
