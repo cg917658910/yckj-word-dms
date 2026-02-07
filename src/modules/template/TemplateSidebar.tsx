@@ -1,10 +1,11 @@
-import type { MouseEvent } from 'react'
+﻿import type { MouseEvent } from 'react'
 import TreeView from '../../components/TreeView'
-import type { FolderNode, DocMenuState } from '../../types'
+import type { DocMenuState, DocSummary, FolderNode } from '../../types'
 
 type Props = {
   nodes: FolderNode[]
   rootActive: boolean
+  rootDocs: DocSummary[]
   selectedFolderId: number | null
   collapsed: Set<number>
   hoverId: number | null
@@ -21,6 +22,7 @@ type Props = {
 const TemplateSidebar = ({
   nodes,
   rootActive,
+  rootDocs,
   selectedFolderId,
   collapsed,
   hoverId,
@@ -39,6 +41,7 @@ const TemplateSidebar = ({
     rootActive={rootActive}
     onRootClick={onRootClick}
     onRootContextMenu={onRootContextMenu}
+    rootDocs={rootDocs}
     selectedFolderId={selectedFolderId}
     collapsed={collapsed}
     onToggle={onToggleFolder}
@@ -52,3 +55,4 @@ const TemplateSidebar = ({
 )
 
 export default TemplateSidebar
+

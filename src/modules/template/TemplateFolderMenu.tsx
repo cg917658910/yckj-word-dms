@@ -1,4 +1,4 @@
-import type { MenuState } from '../../types'
+﻿import type { MenuState } from '../../types'
 
 type Props = {
   menu: MenuState | null
@@ -42,12 +42,11 @@ const TemplateFolderMenu = ({
           <div className='menu main'>
             <button className='menu-item with-arrow' onMouseEnter={() => onSubmenuOpen(true)}>
               <span>新建</span>
-              <span className='menu-arrow'>›</span>
+              <span className='menu-arrow'>▸</span>
             </button>
             <div className='menu-divider' />
             <button className='menu-item' disabled={disableActions} onClick={onRename}>
-              重命名
-            </button>
+              重命名            </button>
             <div className='menu-divider' />
             <button className='menu-item' onClick={onUploadFiles}>上传文件</button>
             <button className='menu-item' onClick={onUploadFolder}>上传文件夹</button>
@@ -68,3 +67,4 @@ const TemplateFolderMenu = ({
 }
 
 export default TemplateFolderMenu
+

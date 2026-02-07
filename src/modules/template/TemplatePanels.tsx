@@ -1,6 +1,5 @@
-import type { RefObject } from 'react'
-import TreeView from '../../components/TreeView'
-import type { FolderNode, TemplateEditorState, TemplateRow } from '../../types'
+﻿import TreeView from '../../components/TreeView';
+import type { FolderNode, TemplateEditorState, TemplateRow } from '../../types';
 
 type Props = {
   panel: { folderId: number | null; mode: 'create' | 'manage' } | null
@@ -23,13 +22,12 @@ type Props = {
   onEditTemplate: (tpl: TemplateRow) => void
   onDeleteTemplate: () => void
   onOpenTemplateEditor: (mode: 'create' | 'edit', template?: TemplateRow) => void
-  onImportTemplates: () => void
   onSaveAsTemplate: () => void
   canSaveAsTemplate: boolean
   editor: TemplateEditorState | null
   onCloseEditor: () => void
   onEditorNameChange: (value: string) => void
-  editorRef: RefObject<HTMLDivElement>
+  onEditorContentChange: (value: string) => void
   onEditorSave: () => void
 }
 
@@ -54,13 +52,12 @@ const TemplatePanels = ({
   onEditTemplate,
   onDeleteTemplate,
   onOpenTemplateEditor,
-  onImportTemplates,
   onSaveAsTemplate,
   canSaveAsTemplate,
   editor,
   onCloseEditor,
   onEditorNameChange,
-  editorRef,
+  onEditorContentChange,
   onEditorSave,
 }: Props) => (
   <>
@@ -145,48 +142,6 @@ const TemplatePanels = ({
               </>
             )}
           </div>
-          {panel.mode === 'manage' ? (
-            <div className='panel-footer'>
-              <button className='ghost' onClick={() => onOpenTemplateEditor('create')}>新增模板</button>
-              <button className='ghost' onClick={onImportTemplates}>
-                导入模板
-              </button>
-              <button className='primary' onClick={onSaveAsTemplate} disabled={!canSaveAsTemplate}>保存当前文档为模板</button>
-            </div>
-          ) : null}
-        </div>
-      </div>
-    ) : null}
-
-    {editor ? (
-      <div className='panel-backdrop' onClick={onCloseEditor}>
-        <div className='panel editor-panel' onClick={(event) => event.stopPropagation()}>
-          <div className='panel-header'>
-            <div className='panel-title'>{editor.mode === 'create' ? '新建模板' : '编辑模板'}</div>
-            <button className='ghost' onClick={onCloseEditor}>关闭</button>
-          </div>
-          <div className='panel-body'>
-            <label className='panel-field'>
-              <span>模板名称</span>
-              <input
-                value={editor.name}
-                onChange={(event) => onEditorNameChange(event.target.value)}
-              />
-            </label>
-            <label className='panel-field'>
-              <span>模板内容（支持富文本粘贴）</span>
-              <div
-                className='template-editor'
-                contentEditable
-                suppressContentEditableWarning
-                ref={editorRef}
-              />
-            </label>
-          </div>
-          <div className='panel-footer'>
-            <button className='ghost' onClick={onCloseEditor}>取消</button>
-            <button className='primary' onClick={onEditorSave}>保存</button>
-          </div>
         </div>
       </div>
     ) : null}
@@ -194,3 +149,4 @@ const TemplatePanels = ({
 )
 
 export default TemplatePanels
+

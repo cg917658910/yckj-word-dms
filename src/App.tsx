@@ -2,7 +2,6 @@
 import './App.css'
 import EditorPane from './components/EditorPane'
 import { useDocuments } from './hooks/useDocuments'
-import { useEditor } from './hooks/useEditor'
 import { useTemplates } from './hooks/useTemplates'
 import DocFolderMenu from './modules/doc/DocFolderMenu'
 import DocMenu from './modules/doc/DocMenu'
@@ -30,6 +29,7 @@ function App() {
   const [menuSubOpen, setMenuSubOpen] = useState(false)
   const [hoverFolderId, setHoverFolderId] = useState<number | null>(null)
   const [titleDraft, setTitleDraft] = useState('')
+  const [editorHtml, setEditorHtml] = useState('')
   const [editorMenuOpen, setEditorMenuOpen] = useState(false)
   const [findReplaceOpen, setFindReplaceOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'doc' | 'template'>('doc')
@@ -55,7 +55,8 @@ function App() {
     activeFolderId,
     activeDoc,
     collapsedFolders,
-    docMenu,
+      docMenu,
+      rootDocs,
     findQuery,
     replaceQuery,
     findCommitQuery,
@@ -91,12 +92,12 @@ function App() {
     activeTemplateFolderId,
     activeTemplate,
     collapsedTemplateFolders,
-    templatePanel,
+      templatePanel,
+      rootTemplates,
     templateEditor,
     templateSearch,
     templatePickId,
     templateMenu,
-    templateEditorRef,
     filteredTemplates,
     setTemplatePanel,
     setTemplateEditor,
@@ -120,7 +121,6 @@ function App() {
     handleRenameTemplate,
     handleDeleteTemplate,
     handleCopyTemplate,
-    handleImportTemplates,
     handleUploadTemplateFiles,
     handleUploadTemplateFolder,
     handleMenuCreateFromTemplate,
@@ -141,15 +141,15 @@ function App() {
 
   useEffect(() => {
     if (viewMode !== 'doc') return
-    if (!activeDoc || !editorRef.current) return
-    editorRef.current.innerHTML = activeDoc.content || ''
+    if (!activeDoc) return
+    setEditorHtml(activeDoc.content || '')
     setTitleDraft(activeDoc.title)
   }, [activeDoc, viewMode])
 
   useEffect(() => {
     if (viewMode !== 'template') return
-    if (!activeTemplate || !editorRef.current) return
-    editorRef.current.innerHTML = activeTemplate.content || ''
+    if (!activeTemplate) return
+    setEditorHtml(activeTemplate.content || '')
     setTitleDraft(activeTemplate.name)
   }, [activeTemplate, viewMode])
 
@@ -161,14 +161,13 @@ function App() {
     }
   }, [viewMode, activeDoc, activeTemplate])
 
-    const handleSave = async () => {
-    if (!editorRef.current) return
+  const handleSave = async () => {
     if (viewMode === 'doc') {
       if (!activeDoc) return
       const next = await window.api.db.saveDoc({
         id: activeDoc.id,
         title: titleDraft.trim() || activeDoc.title,
-        content: editorRef.current.innerHTML,
+        content: editorHtml,
       })
       setActiveDoc(next)
       if (next) {
@@ -184,7 +183,7 @@ function App() {
       const next = {
         ...activeTemplate,
         name: titleDraft.trim() || activeTemplate.name,
-        content: editorRef.current.innerHTML,
+        content: editorHtml,
       }
       await window.api.db.updateTemplate({
         id: activeTemplate.id,
@@ -198,21 +197,21 @@ function App() {
     }
   }
 
-  const {
-    editorRef,
-    lineHeight,
-    setLineHeight,
-    applyCommand,
-    applyWithSelection,
-    applyBlockStyle,
-    adjustIndent,
-    handleEditorKeyDown,
-    onSelectMouseDown,
-    onEditorMouseDown,
-    onEditorMouseUp,
-    onEditorKeyUp,
-    onEditorBlur,
-  } = useEditor({ onSave: handleSave })
+  useEffect(() => {
+    if (viewMode === 'doc' && activeDoc) {
+      const timer = setTimeout(() => {
+        handleSave()
+      }, 600)
+      return () => clearTimeout(timer)
+    }
+    if (viewMode === 'template' && activeTemplate) {
+      const timer = setTimeout(() => {
+        handleSave()
+      }, 600)
+      return () => clearTimeout(timer)
+    }
+    return undefined
+  }, [editorHtml, titleDraft, viewMode, activeDoc, activeTemplate])
 
   const handleTitleBlur = async () => {
     if (!titleDraft.trim()) {
@@ -224,8 +223,9 @@ function App() {
       if (!activeDoc) return
       if (titleDraft.trim() === activeDoc.title) return
       const detail = await window.api.db.renameDoc({ id: activeDoc.id, title: titleDraft.trim() })
-      if (detail) setActiveDoc(detail)
       if (detail) {
+        setActiveDoc(detail)
+        setEditorHtml(detail.content || '')
         const nextDocs = docs.map((doc) => (doc.id === detail.id ? { ...doc, title: detail.title, updatedAt: detail.updatedAt } : doc))
         syncTreeWithDocs(nextDocs)
       }
@@ -255,6 +255,7 @@ function App() {
     const nextDocs = [toDocSummary(detail), ...docs]
     syncTreeWithDocs(nextDocs)
     setActiveDoc(detail)
+    setEditorHtml(detail.content || '')
   }
 
   const handleOpenTemplatePanel = (folderId: number | null, mode: 'create' | 'manage') => {
@@ -268,7 +269,7 @@ function App() {
     setTemplateEditor({
       mode: 'create',
       name: activeDoc.title,
-      content: editorRef.current?.innerHTML ?? '',
+      content: editorHtml,
     })
   }
 
@@ -278,7 +279,7 @@ function App() {
 
   const handleExport = async (format: 'pdf' | 'word') => {
     if (!activeDoc) return
-    const content = editorRef.current?.innerHTML ?? ''
+    const content = editorHtml
     await window.api.exportDoc({
       title: titleDraft.trim() || activeDoc.title,
       content,
@@ -392,6 +393,7 @@ function App() {
               <DocSidebar
                 nodes={folders}
                 rootActive={activeFolderId === null}
+                rootDocs={rootDocs}
                 selectedFolderId={activeFolderId}
                 collapsed={collapsedFolders}
                 hoverId={hoverFolderId}
@@ -416,6 +418,7 @@ function App() {
               <TemplateSidebar
                 nodes={templateFolders}
                 rootActive={activeTemplateFolderId === null}
+                rootDocs={rootTemplates}
                 selectedFolderId={activeTemplateFolderId}
                 collapsed={collapsedTemplateFolders}
                 hoverId={hoverFolderId}
@@ -458,19 +461,8 @@ function App() {
         activeDoc={activeDoc}
         activeTemplate={activeTemplate}
         formatDate={formatDate}
-        applyCommand={applyCommand}
-        applyWithSelection={applyWithSelection}
-        applyBlockStyle={applyBlockStyle}
-        adjustIndent={adjustIndent}
-        lineHeight={lineHeight}
-        onLineHeightChange={setLineHeight}
-        onSelectMouseDown={onSelectMouseDown}
-        editorRef={editorRef}
-        onEditorKeyDown={handleEditorKeyDown}
-        onEditorKeyUp={onEditorKeyUp}
-        onEditorMouseUp={onEditorMouseUp}
-        onEditorMouseDown={onEditorMouseDown}
-        onEditorBlur={onEditorBlur}
+        value={editorHtml}
+        onChange={setEditorHtml}
       />
 
       {dialog ? (
@@ -570,7 +562,6 @@ function App() {
         onEditTemplate={handleEditTemplate}
         onDeleteTemplate={handleDeleteTemplate}
         onOpenTemplateEditor={handleOpenTemplateEditor}
-        onImportTemplates={handleImportTemplates}
         onSaveAsTemplate={handleSaveAsTemplate}
         canSaveAsTemplate={!!activeDoc}
         editor={templateEditor}
@@ -579,8 +570,11 @@ function App() {
           if (!templateEditor) return
           setTemplateEditor({ ...templateEditor, name: value })
         }}
-        editorRef={templateEditorRef}
-        onEditorSave={handleTemplateEditorSave}
+                onEditorSave={handleTemplateEditorSave}
+        onEditorContentChange={(value) => {
+          if (!templateEditor) return
+          setTemplateEditor({ ...templateEditor, content: value })
+        }}
       />
 
       <FindReplacePanel
@@ -617,6 +611,24 @@ function App() {
 }
 
 export default App
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

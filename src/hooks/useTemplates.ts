@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import type {
   DialogState,
   DocDetail,
@@ -27,8 +27,6 @@ export const useTemplates = ({ openDialog }: Options) => {
   const [templateSearch, setTemplateSearch] = useState('')
   const [templatePickId, setTemplatePickId] = useState<number | null>(null)
   const [templateMenu, setTemplateMenu] = useState<DocMenuState | null>(null)
-  const templateEditorRef = useRef<HTMLDivElement | null>(null)
-
   const templateFolderMap = useMemo(
     () => new Map(templateFolderRows.map((row) => [row.id, row])),
     [templateFolderRows],
@@ -207,7 +205,7 @@ export const useTemplates = ({ openDialog }: Options) => {
   const handleTemplateEditorSave = async () => {
     if (!templateEditor) return
     if (!templateEditor.name.trim()) return
-    const content = templateEditorRef.current?.innerHTML ?? ''
+    const content = templateEditor.content || ''
     if (templateEditor.mode === 'create') {
       await window.api.db.createTemplate({
         name: templateEditor.name.trim(),
@@ -290,35 +288,58 @@ export const useTemplates = ({ openDialog }: Options) => {
     syncTreeWithTemplates(next)
     setActiveTemplate(next[0])
   }
-
-  const handleImportTemplates = async () => {
+  const handleUploadTemplateFiles = async (folderId: number | null) => {
     try {
-      await window.api.importTemplates()
+      await window.api.uploadTemplateFiles(folderId)
       const next = await window.api.db.listTemplates()
-      syncTreeWithTemplates(next)
+      await refreshTemplateFolders(next, true)
+      if (typeof folderId === 'number') {
+        setActiveTemplateFolderId(folderId)
+        setCollapsedTemplateFolders((prev) => {
+          const nextSet = new Set(prev)
+          nextSet.delete(folderId)
+          return nextSet
+        })
+        const inFolder = next.filter((tpl) => (tpl.folderId ?? null) === folderId)
+        setActiveTemplate(inFolder[0] ?? null)
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       openDialog({
-        title: '导入模板失败',
+        title: '上传模板失败',
         message,
         confirmText: '知道了',
-        cancelText: '关闭',
         showInput: false,
         onConfirm: async () => {},
       })
     }
   }
 
-  const handleUploadTemplateFiles = async (folderId: number | null) => {
-    await window.api.uploadTemplateFiles(folderId)
-    const next = await window.api.db.listTemplates()
-    syncTreeWithTemplates(next)
-  }
-
   const handleUploadTemplateFolder = async (folderId: number | null) => {
-    await window.api.uploadTemplateFolder(folderId)
-    const next = await window.api.db.listTemplates()
-    syncTreeWithTemplates(next)
+    try {
+      await window.api.uploadTemplateFolder(folderId)
+      const next = await window.api.db.listTemplates()
+      await refreshTemplateFolders(next, true)
+      if (typeof folderId === 'number') {
+        setActiveTemplateFolderId(folderId)
+        setCollapsedTemplateFolders((prev) => {
+          const nextSet = new Set(prev)
+          nextSet.delete(folderId)
+          return nextSet
+        })
+        const inFolder = next.filter((tpl) => (tpl.folderId ?? null) === folderId)
+        setActiveTemplate(inFolder[0] ?? null)
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      openDialog({
+        title: '上传模板失败',
+        message,
+        confirmText: '知道了',
+        showInput: false,
+        onConfirm: async () => {},
+      })
+    }
   }
 
   const handleMenuCreateFromTemplate = async (folderId: number | null, template: TemplateRow): Promise<DocDetail | null> => {
@@ -329,6 +350,11 @@ export const useTemplates = ({ openDialog }: Options) => {
     })
     return detail ?? null
   }
+
+  const rootTemplates = useMemo(
+    () => templates.filter((tpl) => (tpl.folderId ?? null) === null).map(toTemplateSummary),
+    [templates],
+  )
 
   const filteredTemplates = useMemo(() => {
     const key = templateSearch.trim()
@@ -355,11 +381,6 @@ export const useTemplates = ({ openDialog }: Options) => {
   }
 
   useEffect(() => {
-    if (!templateEditor || !templateEditorRef.current) return
-    templateEditorRef.current.innerHTML = templateEditor.content || ''
-  }, [templateEditor])
-
-  useEffect(() => {
     if (!activeTemplate && templates.length) {
       setActiveTemplate(templates[0])
     }
@@ -379,9 +400,9 @@ export const useTemplates = ({ openDialog }: Options) => {
     templateSearch,
     templatePickId,
     templateMenu,
-    templateEditorRef,
     recentTemplates,
     filteredTemplates,
+    rootTemplates,
     setTemplatePanel,
     setTemplateEditor,
     setTemplateSearch,
@@ -404,7 +425,6 @@ export const useTemplates = ({ openDialog }: Options) => {
     handleRenameTemplate,
     handleDeleteTemplate,
     handleCopyTemplate,
-    handleImportTemplates,
     handleUploadTemplateFiles,
     handleUploadTemplateFolder,
     handleMenuCreateFromTemplate,

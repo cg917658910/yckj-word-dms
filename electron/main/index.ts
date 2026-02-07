@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createTemplate, createTemplateFolder, importTemplates, listTemplateFolders, registerDbIpc } from './db'
+import { createTemplate, createTemplateFolder, listTemplateFolders, registerDbIpc } from './db'
 //import { update } from './update'
 
 const require = createRequire(import.meta.url)
@@ -202,73 +202,13 @@ ipcMain.handle('doc:export', async (event, payload: { title: string; content: st
   return true
 })
 
-ipcMain.handle('template:import', async () => {
-  const { canceled, filePaths } = await dialog.showOpenDialog({
-    title: '导入模板',
-    filters: [
-      { name: '模板文件', extensions: ['pdf', 'docx', 'doc'] },
-    ],
-    properties: ['openFile', 'multiSelections'],
-  })
-  if (canceled || !filePaths.length) return false
- 
-  const mammoth = await import('mammoth')
-  const fs = await import('node:fs/promises')
-  const pathMod = await import('node:path')
-
-  const items: Array<{ name: string; content: string }> = []
-
-  for (const filePath of filePaths) {
-    const ext = pathMod.extname(filePath).toLowerCase()
-    const base = pathMod.basename(filePath, ext)
-    if (ext === '.docx') {
-      const buffer = await fs.readFile(filePath)
-      const styleMap = [
-        "p[style-name='Heading 1'] => h1:fresh",
-        "p[style-name='Heading 2'] => h2:fresh",
-        "p[style-name='Title'] => h1:fresh",
-        "p[style-name='Subtitle'] => h2:fresh",
-        "p[style-name='Quote'] => blockquote:fresh",
-      ]
-      const result = await mammoth.convertToHtml(
-        { buffer },
-        {
-          includeDefaultStyleMap: true,
-          styleMap,
-          ignoreEmptyParagraphs: false,
-          convertImage: mammoth.images.inline(async (image: any) => {
-            const buffer = await image.read('base64')
-            return { src: `data:${image.contentType};base64,${buffer}` }
-          }),
-        },
-      )
-      const normalized = result.value
-        .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
-        .replace(/ {2,}/g, (m: string) => `${'&nbsp;'.repeat(m.length - 1)} `)
-      const html = `<div class="docx-import">${normalized}</div>`
-      items.push({ name: base, content: html })
-    } else if (ext === '.pdf') {
-        const buffer = await fs.readFile(filePath)
-        const pdfParse = require('pdf-parse/dist/node/cjs/index.cjs') as (input: Buffer) => Promise<{ text: string }>
-        const data = await pdfParse(buffer)
-        const html = `<p>${data.text.replace(/\n+/g, '<br/>')}</p>`
-        items.push({ name: base, content: html })
-      }/*  else if (ext === '.doc') {
-      const buffer = await fs.readFile(filePath) // Buffer
-      const html = `<p>已导入 Word 文档（.doc），请手动校对格式。</p><pre>${buffer.toString('base64').slice(0, 200)}...</pre>`
-      items.push({ name: base, content: html })
-    } */
-  }
-
-  if (!items.length) return false
-  await importTemplates(items)
-  return true
-})
-
 const toHtmlFromFile = async (filePath: string) => {
   const fs = await import('node:fs/promises')
   const pathMod = await import('node:path')
   const ext = pathMod.extname(filePath).toLowerCase()
+  if (ext === '.html' || ext === '.htm') {
+    return fs.readFile(filePath, 'utf8')
+  }
   if (ext === '.docx') {
     const mammoth = await import('mammoth')
     const buffer = await fs.readFile(filePath)
@@ -285,10 +225,10 @@ const toHtmlFromFile = async (filePath: string) => {
         includeDefaultStyleMap: true,
         styleMap,
         ignoreEmptyParagraphs: false,
-        convertImage: mammoth.images.inline(async (image: any) => {
+        /* convertImage: mammoth.images.inline(async (image: any) => {
           const buffer = await image.read('base64')
           return { src: `data:${image.contentType};base64,${buffer}` }
-        }),
+        }), */
       },
     )
     const normalized = result.value
@@ -306,20 +246,28 @@ const toHtmlFromFile = async (filePath: string) => {
 }
 
 ipcMain.handle('template:upload-files', async (_event, payload?: { folderId?: number | null }) => {
+  const allowedExtensions = ['pdf', 'docx', 'doc', 'html', 'htm']
+  const allowedExtensionsStr = allowedExtensions.map((ext) => `.${ext}`).join(', ')
   const { canceled, filePaths } = await dialog.showOpenDialog({
     title: '上传模板文件',
-    filters: [{ name: '模板文件', extensions: ['pdf', 'docx', 'doc'] }],
+    filters: [{ name: '模板文件', extensions: allowedExtensions }],
     properties: ['openFile', 'multiSelections'],
   })
   if (canceled || !filePaths.length) return false
   const pathMod = await import('node:path')
+  try {
   for (const filePath of filePaths) {
     const ext = pathMod.extname(filePath).toLowerCase()
-    if (!['.pdf', '.docx'].includes(ext)) continue
+    if (!allowedExtensionsStr.includes(ext)) continue
     const base = pathMod.basename(filePath, ext)
     const html = await toHtmlFromFile(filePath)
     if (!html) continue
     await createTemplate({ name: base, content: html, folderId: payload?.folderId ?? null })
+  }
+  } catch (error) {
+    console.warn('上传模板失败:', error)
+    dialog.showErrorBox('上传失败', `请确保文件格式正确且内容不损坏。`)
+    return false
   }
   return true
 })
@@ -354,14 +302,19 @@ ipcMain.handle('template:upload-folder', async (_event, payload?: { folderId?: n
         await walk(root, abs, nextId)
       } else {
         const ext = pathMod.extname(entry.name).toLowerCase()
-        if (!['.pdf', '.docx'].includes(ext)) continue
-        const base = pathMod.basename(entry.name, ext)
-        const html = await toHtmlFromFile(abs)
-        if (!html) continue
-        await createTemplate({ name: base, content: html, folderId: parentId })
+          if (!['.pdf', '.docx', '.html', '.htm'].includes(ext)) continue
+          const base = pathMod.basename(entry.name, ext)
+          try {
+            const html = await toHtmlFromFile(abs)
+            if (!html) continue
+            await createTemplate({ name: base, content: html, folderId: parentId })
+          } catch (error) {
+            console.warn('上传模板失败:', abs, error)
+            throw error
+          }
+        }
       }
     }
-  }
 
   for (const root of filePaths) {
     const rootName = pathMod.basename(root)

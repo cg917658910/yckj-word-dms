@@ -709,10 +709,33 @@
 
 .editor-paper {
   background: #fff;
-  padding: 24px 28px 40px;
   height: 100%;
   line-height: 1.9;
   color: #1f2937;
+}
+
+.editor-paper .ck-editor__editable {
+  min-height: 760px;
+  color: #1f2937;
+  background: #fff;
+}
+
+.editor-paper .ck-content {
+  font-size: 14px;
+  line-height: 1.9;
+  word-break: break-word;
+}
+
+.editor-paper .ck-content span[style*='mso-spacerun'] {
+  white-space: pre-wrap;
+}
+
+.editor-paper .ck-content span[style*='color: #fff'],
+.editor-paper .ck-content span[style*='color:#fff'],
+.editor-paper .ck-content span[style*='color: rgb(255, 255, 255)'],
+.editor-paper .ck-content span[style*='color: rgb(255,255,255)'],
+.editor-paper .ck-content span[style*='color: white'] {
+  color: #111827 !important;
 }
 
 .editor-paper:focus,
@@ -976,7 +999,7 @@
 }
 
 .panel {
-  width: min(520px, 92vw);
+  width: min(820px, 92vw);
   background: #fff;
   border-radius: 18px;
   padding: 18px;

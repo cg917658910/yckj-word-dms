@@ -1,5 +1,5 @@
 import type { CSSProperties, MouseEvent } from 'react'
-import type { FolderNode } from '../types'
+import type { DocSummary, FolderNode } from '../types'
 
 type Props = {
   nodes: FolderNode[]
@@ -7,6 +7,7 @@ type Props = {
   rootActive: boolean
   onRootClick: () => void
   onRootContextMenu?: (event: MouseEvent<HTMLButtonElement>) => void
+  rootDocs?: DocSummary[]
   selectedFolderId: number | null | undefined
   collapsed: Set<number>
   onToggle: (id: number) => void
@@ -112,6 +113,7 @@ const TreeView = ({
   rootActive,
   onRootClick,
   onRootContextMenu,
+  rootDocs,
   selectedFolderId,
   collapsed,
   onToggle,
@@ -132,6 +134,24 @@ const TreeView = ({
       <span className='tree-icon' />
       <span className='tree-name'>{rootLabel}</span>
     </button>
+    {rootDocs && rootDocs.length ? (
+      <div className='tree-docs'>
+        {rootDocs.map((doc) => (
+          <button
+            key={doc.id}
+            className={`tree-doc ${activeDocId === doc.id ? 'active' : ''}`}
+            onClick={() => onSelectDoc(doc.id)}
+            onContextMenu={(event) => {
+              event.preventDefault()
+              onDocMenu(doc.id, event.clientX, event.clientY)
+            }}
+          >
+            <span className='doc-icon small' />
+            <span className='tree-doc-title'>{doc.title}</span>
+          </button>
+        ))}
+      </div>
+    ) : null}
     {renderTree(
       nodes,
       0,

@@ -275,6 +275,8 @@ export const useDocuments = ({ openDialog }: Options) => {
     setActiveDoc(detail)
   }
 
+  const rootDocs = useMemo(() => docs.filter((doc) => doc.folderId === null), [docs])
+
   const matchedDocs = useMemo(() => {
     const q = findCommitQuery.trim()
     if (!q) return []
@@ -325,6 +327,7 @@ export const useDocuments = ({ openDialog }: Options) => {
     replaceQuery,
     findCommitQuery,
     matchedDocs,
+    rootDocs,
     setDocMenu,
     setFindQuery,
     setReplaceQuery,
