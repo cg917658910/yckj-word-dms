@@ -3,7 +3,6 @@ import type {
   DialogState,
   DocDetail,
   DocMenuState,
-  FolderNode,
   TemplateEditorState,
   TemplateFolderRow,
   TemplatePanelState,
@@ -17,8 +16,8 @@ type Options = {
 
 export const useTemplates = ({ openDialog }: Options) => {
   const refreshTokenRef = useRef(0)
+  const folderMutationRef = useRef(false)
   const [templateFolderRows, setTemplateFolderRows] = useState<TemplateFolderRow[]>([])
-  const [templateFolders, setTemplateFolders] = useState<FolderNode[]>([])
   const [templates, setTemplates] = useState<TemplateRow[]>([])
   const [activeTemplateFolderId, setActiveTemplateFolderId] = useState<number | null>(null)
   const [activeTemplate, setActiveTemplate] = useState<TemplateRow | null>(null)
@@ -33,20 +32,27 @@ export const useTemplates = ({ openDialog }: Options) => {
     [templateFolderRows],
   )
 
-  const syncTreeWithTemplates = (nextTemplates: TemplateRow[], nextRows = templateFolderRows) => {
+  const syncTreeWithTemplates = (nextTemplates: TemplateRow[]) => {
+    if (folderMutationRef.current) return
     setTemplates(nextTemplates)
-    const templateDocs = nextTemplates.map(toTemplateSummary)
-    setTemplateFolders(buildTree(nextRows, templateDocs))
   }
 
-  const refreshTemplateFolders = async (templateList?: TemplateRow[], preserveCollapsed = true) => {
+  const refreshTemplateFolders = async (
+    templateList?: TemplateRow[],
+    preserveCollapsed = true,
+    force = false,
+    pendingRow?: TemplateFolderRow,
+  ) => {
+    if (folderMutationRef.current && !force) return
     const token = ++refreshTokenRef.current
     const rows = await window.api.db.listTemplateFolders()
     const list = templateList ?? (await window.api.db.listTemplates())
     if (token !== refreshTokenRef.current) return
-    setTemplateFolderRows(rows)
+    const mergedRows = pendingRow
+      ? [...rows.filter((row) => row.id !== pendingRow.id), pendingRow]
+      : rows
+    setTemplateFolderRows(mergedRows)
     setTemplates(list)
-    setTemplateFolders(buildTree(rows, list.map(toTemplateSummary)))
     if (!preserveCollapsed) {
       const collapsed = new Set<number>()
       const folderWithTemplates = new Set<number>()
@@ -61,6 +67,14 @@ export const useTemplates = ({ openDialog }: Options) => {
         }
       })
       setCollapsedTemplateFolders(collapsed)
+    } else {
+      setCollapsedTemplateFolders((prev) => {
+        const next = new Set(prev)
+        next.forEach((id) => {
+          if (!rows.some((row) => row.id === id)) next.delete(id)
+        })
+        return next
+      })
     }
   }
 
@@ -104,20 +118,17 @@ export const useTemplates = ({ openDialog }: Options) => {
       showInput: true,
       onConfirm: async (value) => {
         if (!value) return
-        refreshTokenRef.current += 1
         const id = await window.api.db.createTemplateFolder({ name: value, parentId: activeTemplateFolderId })
-        if (!id) return
-        const newRow: TemplateFolderRow = {
+        if (!id) {
+          return
+        }
+        const pendingRow: TemplateFolderRow = {
           id,
           name: value,
           parentId: activeTemplateFolderId,
           sortOrder: Date.now(),
         }
-        setTemplateFolderRows((prev) => {
-          const next = [...prev, newRow]
-          setTemplateFolders(buildTree(next, templates.map(toTemplateSummary)))
-          return next
-        })
+        setTemplateFolderRows((prev) => [...prev, pendingRow])
       },
     })
   }
@@ -134,11 +145,15 @@ export const useTemplates = ({ openDialog }: Options) => {
       onConfirm: async (value) => {
         if (!value) return
         await window.api.db.renameTemplateFolder({ id: activeTemplateFolderId, name: value })
-        setTemplateFolderRows((prev) => {
-          const next = prev.map((row) => (row.id === activeTemplateFolderId ? { ...row, name: value } : row))
-          setTemplateFolders(buildTree(next, templates.map(toTemplateSummary)))
-          return next
-        })
+        const pendingRow: TemplateFolderRow = {
+          id: activeTemplateFolderId,
+          name: value,
+          parentId: current?.parentId ?? null,
+          sortOrder: current?.sortOrder ?? Date.now(),
+        }
+        setTemplateFolderRows((prev) =>
+          prev.map((row) => (row.id === pendingRow.id ? { ...row, name: pendingRow.name } : row)),
+        )
       },
     })
   }
@@ -154,14 +169,10 @@ export const useTemplates = ({ openDialog }: Options) => {
       onConfirm: async () => {
         await window.api.db.deleteTemplateFolder(activeTemplateFolderId)
         const idsToRemove = collectDescendantIds(templateFolderRows, activeTemplateFolderId)
-        setTemplateFolderRows((prev) => {
-          const next = prev.filter((row) => !idsToRemove.has(row.id))
-          const nextTemplates = templates.map((tpl) =>
-            idsToRemove.has(tpl.folderId ?? -1) ? { ...tpl, folderId: null } : tpl
-          )
-          syncTreeWithTemplates(nextTemplates, next)
-          return next
-        })
+        setTemplateFolderRows((prev) => prev.filter((row) => !idsToRemove.has(row.id)))
+        setTemplates((prev) =>
+          prev.map((tpl) => (idsToRemove.has(tpl.folderId ?? -1) ? { ...tpl, folderId: null } : tpl)),
+        )
         if (idsToRemove.has(activeTemplateFolderId)) setActiveTemplateFolderId(null)
       },
     })
@@ -294,7 +305,8 @@ export const useTemplates = ({ openDialog }: Options) => {
   }
   const handleUploadTemplateFiles = async (folderId: number | null) => {
     try {
-      await window.api.uploadTemplateFiles(folderId)
+      const ok = await window.api.uploadTemplateFiles(folderId)
+      if (!ok) return
       const next = await window.api.db.listTemplates()
       await refreshTemplateFolders(next, true)
       if (typeof folderId === 'number') {
@@ -306,6 +318,10 @@ export const useTemplates = ({ openDialog }: Options) => {
         })
         const inFolder = next.filter((tpl) => (tpl.folderId ?? null) === folderId)
         setActiveTemplate(inFolder[0] ?? null)
+      } else {
+        setActiveTemplateFolderId(null)
+        const inRoot = next.filter((tpl) => (tpl.folderId ?? null) === null)
+        setActiveTemplate(inRoot[0] ?? null)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -321,7 +337,8 @@ export const useTemplates = ({ openDialog }: Options) => {
 
   const handleUploadTemplateFolder = async (folderId: number | null) => {
     try {
-      await window.api.uploadTemplateFolder(folderId)
+      const ok = await window.api.uploadTemplateFolder(folderId)
+      if (!ok) return
       const next = await window.api.db.listTemplates()
       await refreshTemplateFolders(next, true)
       if (typeof folderId === 'number') {
@@ -333,6 +350,10 @@ export const useTemplates = ({ openDialog }: Options) => {
         })
         const inFolder = next.filter((tpl) => (tpl.folderId ?? null) === folderId)
         setActiveTemplate(inFolder[0] ?? null)
+      } else {
+        setActiveTemplateFolderId(null)
+        const inRoot = next.filter((tpl) => (tpl.folderId ?? null) === null)
+        setActiveTemplate(inRoot[0] ?? null)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -358,6 +379,10 @@ export const useTemplates = ({ openDialog }: Options) => {
   const rootTemplates = useMemo(
     () => templates.filter((tpl) => (tpl.folderId ?? null) === null).map(toTemplateSummary),
     [templates],
+  )
+  const templateFolders = useMemo(
+    () => buildTree(templateFolderRows, templates.map(toTemplateSummary)),
+    [templateFolderRows, templates],
   )
 
   const filteredTemplates = useMemo(() => {
@@ -437,5 +462,6 @@ export const useTemplates = ({ openDialog }: Options) => {
     handleTemplateMenuDelete,
   }
 }
+
 
 

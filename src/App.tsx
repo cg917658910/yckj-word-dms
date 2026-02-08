@@ -300,10 +300,25 @@ function App() {
   const handleExport = async (format: 'pdf' | 'word' | 'html') => {
     if (!activeDoc) return
     const content = composeWithStyle(editorHtml, editorStyle)
-    await window.api.exportDoc({
-      title: titleDraft.trim() || activeDoc.title,
+    const res = await window.api.exportDoc({
+      title: activeDoc.title,
       content,
         format,
+    })
+    if (!res) {
+      openDialog({
+        title: '导出失败',
+        message: '导出过程中发生错误，请稍后再试。',
+        confirmText: '知道了',
+        onConfirm: () => {}
+      })
+      return;
+    }
+    openDialog({
+      title: '导出成功',
+      message: '文档已成功导出到您选择的位置。',
+      confirmText: '知道了',
+      onConfirm: () => {}
     })
   }
 
@@ -353,13 +368,13 @@ function App() {
   }
 
   const handleTemplateMenuUploadFiles = async () => {
-    const targetFolderId = menu?.folderId === 0 ? activeTemplateFolderId : menu?.folderId
+    const targetFolderId = menu?.folderId === 0 ? null : menu?.folderId
     handleFolderMenuClose()
     await handleUploadTemplateFiles(typeof targetFolderId === 'number' ? targetFolderId : null)
   }
 
   const handleTemplateMenuUploadFolder = async () => {
-    const targetFolderId = menu?.folderId === 0 ? activeTemplateFolderId : menu?.folderId
+    const targetFolderId = menu?.folderId === 0 ? null : menu?.folderId
     handleFolderMenuClose()
     await handleUploadTemplateFolder(typeof targetFolderId === 'number' ? targetFolderId : null)
   }
@@ -636,7 +651,6 @@ function App() {
 }
 
 export default App
-
 
 
 

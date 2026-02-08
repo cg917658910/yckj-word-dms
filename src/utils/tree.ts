@@ -43,9 +43,13 @@ export const buildTree = (rows: FolderRow[], docs: DocSummary[]): FolderNode[] =
     node.docs = docsByFolder.get(row.id) ?? []
   })
 
+  const alphaFirst = (value: string) => (/^[A-Za-z]/.test(value) ? 0 : 1)
+
   const sortTree = (nodes: FolderNode[]) => {
     nodes.sort((a, b) => {
-      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder
+      const wa = alphaFirst(a.name)
+      const wb = alphaFirst(b.name)
+      if (wa !== wb) return wa - wb
       return a.name.localeCompare(b.name, 'zh-CN')
     })
     nodes.forEach((child) => sortTree(child.children))
@@ -69,6 +73,7 @@ export const toDocSummary = (detail: DocDetail): DocSummary => {
     title: detail.title,
     snippet: text.slice(0, 120),
     updatedAt: detail.updatedAt,
+    createdAt: detail.createdAt,
     size: (detail.content || '').length,
   }
 }
@@ -81,6 +86,7 @@ export const toTemplateSummary = (template: TemplateRow): DocSummary => {
     title: template.name,
     snippet: text.slice(0, 120),
     updatedAt: template.updatedAt,
+    createdAt: template.updatedAt,
     size: (template.content || '').length,
   }
 }

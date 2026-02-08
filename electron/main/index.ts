@@ -1,4 +1,5 @@
 ﻿import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { console } from 'node:inspector'
 import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
@@ -32,7 +33,7 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0)
 }
 // 修改此日期控制试用期 本地时间为准
-const end = new Date(2026, 1, 8, 0, 0, 0) // 月份从 0 开始：6 = 7月
+const end = new Date(2026, 1, 11, 0, 0, 0) // 月份从 0 开始：6 = 7月
 if (new Date() > end) {
   dialog.showErrorBox('试用期已结束', '感谢您使用本软件，如需继续使用请联系开发者。')
   app.quit()
@@ -144,6 +145,11 @@ ipcMain.handle('doc:print', async (event) => {
 ipcMain.handle('doc:export', async (event, payload: { title: string; content: string; format: 'pdf' | 'word' | 'html' }) => {
   const normalizeHtml = (input: string) => input.replace(/\u00a0/g, '&nbsp;')
   const bodyHtml = normalizeHtml(payload.content || '')
+  const safeName = (value: string) => {
+    const cleaned = value.replace(/[\\/:*?"<>|]+/g, '_').trim()
+    return cleaned || '未命名'
+  }
+  const filename = safeName(payload.title)
   const html = `<!doctype html>
 <html>
 <head>
@@ -158,11 +164,10 @@ ipcMain.handle('doc:export', async (event, payload: { title: string; content: st
 </head>
 <body>${bodyHtml}</body>
 </html>`
-
   if (payload.format === 'html') {
     const { canceled, filePath } = await dialog.showSaveDialog({
       title: '导出 HTML',
-      defaultPath: `${payload.title}.html`,
+      defaultPath: `${filename}.html`,
       filters: [{ name: 'HTML 文件', extensions: ['html'] }],
     })
     if (canceled || !filePath) return false
@@ -173,7 +178,7 @@ ipcMain.handle('doc:export', async (event, payload: { title: string; content: st
   if (payload.format === 'pdf') {
     const { canceled, filePath } = await dialog.showSaveDialog({
       title: '导出 PDF',
-      defaultPath: `${payload.title}.pdf`,
+      defaultPath: `${filename}.pdf`,
       filters: [{ name: 'PDF 文件', extensions: ['pdf'] }],
     })
     if (canceled || !filePath) return false
@@ -194,7 +199,7 @@ ipcMain.handle('doc:export', async (event, payload: { title: string; content: st
 
   const { canceled, filePath } = await dialog.showSaveDialog({
     title: '导出 Word',
-    defaultPath: `${payload.title}.docx`,
+    defaultPath: `${filename}.docx`,
     filters: [{ name: 'Word 文件', extensions: ['docx'] }],
   })
   if (canceled || !filePath) return false
@@ -296,9 +301,6 @@ ipcMain.handle('template:upload-files', async (_event, payload?: { folderId?: nu
     const base = pathMod.basename(filePath, ext)
     const html = await toHtmlFromFile(filePath)
     if (!html) continue
-    // 把上传处理后的html 保存为本地文件，方便调试
-    const debugPath = pathMod.join('./tmp', `import_${base}.html`)
-    await import('node:fs/promises').then(fs => fs.writeFile(debugPath, html, 'utf8'))
     await createTemplate({ name: base, content: html, folderId: payload?.folderId ?? null })
   }
   } catch (error) {

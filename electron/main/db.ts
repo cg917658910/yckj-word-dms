@@ -256,7 +256,7 @@ async function listFolders(): Promise<FolderRow[]> {
   const database = await ensureDb()
   return all<FolderRow>(
     database,
-    'select id, name, parent_id as parentId, sort_order as sortOrder from folders order by sort_order asc, id asc'
+    'select id, name, parent_id as parentId, sort_order as sortOrder from folders order by name collate nocase asc, id asc'
   )
 }
 
@@ -264,7 +264,7 @@ export async function listTemplateFolders(): Promise<TemplateFolderRow[]> {
   const database = await ensureDb()
   return all<TemplateFolderRow>(
     database,
-    'select id, name, parent_id as parentId, sort_order as sortOrder from template_folders order by sort_order asc, id asc'
+    'select id, name, parent_id as parentId, sort_order as sortOrder from template_folders order by name collate nocase asc, id asc'
   )
 }
 
@@ -276,7 +276,7 @@ async function listDocuments(folderId: number | null): Promise<DocSummary[]> {
         `select id, folder_id as folderId, title, content,
         updated_at as updatedAt,
         length(content) as size
-        from documents where folder_id = ? order by datetime(updated_at) desc`,
+        from documents where folder_id = ? order by datetime(created_at) desc`,
         [folderId]
       )
     : all<{ id: number; folderId: number | null; title: string; content: string; updatedAt: string; size: number }>(
@@ -284,7 +284,7 @@ async function listDocuments(folderId: number | null): Promise<DocSummary[]> {
         `select id, folder_id as folderId, title, content,
         updated_at as updatedAt,
         length(content) as size
-        from documents order by datetime(updated_at) desc`
+        from documents order by datetime(created_at) desc`
       )
 
   return rows.map((row) => {
@@ -430,10 +430,10 @@ async function createDocument(input: CreateDocInput) {
   const database = await ensureDb()
   // 试用期限制创建文档数量
   const currentCount = get<{ count: number }>(database, 'select count(1) as count from documents')
-  if ((currentCount?.count ?? 0) >= 50) {
+  if ((currentCount?.count ?? 0) >= 100) {
    //弹窗提示
    const { dialog } = await import('electron')
-   dialog.showErrorBox('试用限制', '试用版最多只能创建50个文档，如需继续使用请联系开发者。')
+   dialog.showErrorBox('试用限制', '试用版最多只能创建100个文档，如需继续使用请联系开发者。')
    return null
   }
   run(database, 'insert into documents (folder_id, title, content) values (?, ?, ?)', [
