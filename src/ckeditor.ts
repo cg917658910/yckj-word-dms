@@ -1,5 +1,4 @@
 ﻿import 'ckeditor5/ckeditor5.css'
-import 'ckeditor5/translations/zh-cn.js'
 
 import {
   Alignment,
@@ -8,6 +7,7 @@ import {
   Bold,
   ClassicEditor,
   Essentials,
+  FontColor,
   FontSize,
   Heading,
   Indent,
@@ -16,11 +16,12 @@ import {
   Link,
   List,
   Paragraph,
-  PasteFromOffice,
   Table,
   TableToolbar,
-  Underline,
+  Underline
 } from 'ckeditor5'
+
+import coreTranslations from 'ckeditor5/translations/zh-cn.js'
 
 export const EDITOR_CONFIG = {
   plugins: [
@@ -28,6 +29,7 @@ export const EDITOR_CONFIG = {
     BlockQuote,
     Bold,
     Essentials,
+    FontColor,
     FontSize,
     Heading,
     Alignment,
@@ -37,16 +39,14 @@ export const EDITOR_CONFIG = {
     Link,
     List,
     Paragraph,
-    PasteFromOffice,
+    /* PasteFromOffice */,
     Table,
     TableToolbar,
     Underline,
   ],
   licenseKey: 'GPL',
-  language: {
-    ui: 'zh-cn',
-    content: 'zh-cn',
-  },
+  language: 'zh-cn',
+  translations: [coreTranslations],
   toolbar: [
     'undo',
     'redo',
@@ -54,6 +54,7 @@ export const EDITOR_CONFIG = {
     'heading',
     '|',
     'fontSize',
+    'fontColor',
     '|',
     'bold',
     'italic',

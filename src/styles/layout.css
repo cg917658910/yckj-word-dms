@@ -1,0 +1,102 @@
+/* ===== 全局布局 ===== */
+.app-shell {
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 260px minmax(720px, 1fr);
+  gap: 16px;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.sidebar,
+.list,
+.editor {
+  background: #fff;
+  box-shadow: none;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: rise 700ms ease both;
+}
+
+.sidebar {
+  padding: 18px 0px 18px 18px;
+  gap: 16px;
+  animation-delay: 80ms;
+  min-height: 0;
+}
+
+.list {
+  gap: 16px;
+  animation-delay: 160ms;
+  min-height: 0;
+}
+
+.editor {
+  padding: 0;
+  animation-delay: 240ms;
+  min-height: 0;
+}
+
+/* ===== 动画 ===== */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== 滚动条 ===== */
+.sidebar-scroll::-webkit-scrollbar,
+.list-body::-webkit-scrollbar,
+.editor-canvas::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb,
+.list-body::-webkit-scrollbar-thumb,
+.editor-canvas::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 999px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track,
+.list-body::-webkit-scrollbar-track,
+.editor-canvas::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 1200px) {
+  .app-shell {
+    grid-template-columns: 240px 1fr;
+  }
+}
+
+@media (max-width: 860px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar,
+  .list,
+  .editor {
+    height: auto;
+  }
+}

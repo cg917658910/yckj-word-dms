@@ -1,0 +1,261 @@
+/* ===== 侧边栏 ===== */
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-right: 4px;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brand {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.brand-sub {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-title {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.section-link {
+  color: #2563eb;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.section-link:hover {
+  text-decoration: underline;
+}
+
+.quick-item {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quick-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: #e2e8f0;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ===== 树形结构 ===== */
+.tree {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tree-node {
+  margin-left: calc(var(--depth) * 12px);
+}
+
+.tree-row-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  transition: background 150ms ease;
+  border: none;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tree-toggle {
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #64748b;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+
+.tree-icon {
+  width: 16px;
+  height: 14px;
+  border-radius: 3px;
+  background: #f7c46b;
+  border: none;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.tree-icon::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 2px;
+  width: 10px;
+  height: 6px;
+  border-radius: 3px 3px 0 0;
+  background: #f9d38f;
+  border: none;
+}
+
+.tree-row:hover {
+  background: rgba(148, 163, 184, 0.15);
+}
+
+.tree-row.active {
+  background: rgba(99, 102, 241, 0.16);
+}
+
+.tree-row.active .tree-name {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.tree-caret {
+  display: none;
+}
+
+.tree-caret.collapsed {
+  display: none;
+}
+
+.tree-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #64748b;
+}
+
+.tree-name {
+  font-size: 13px;
+  color: #1f2937;
+}
+
+.tree-children {
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 1px dashed rgba(148, 163, 184, 0.4);
+}
+
+.tree-docs {
+  margin: 4px 0 6px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tree-doc {
+  border: none;
+  background: transparent;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: #475569;
+  cursor: pointer;
+}
+
+.tree-doc.active {
+  background: #eef2f7;
+  color: #1f2937;
+}
+
+.tree-doc-title {
+  font-size: 12px;
+}
+
+.tree-more {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+
+.tree-more.visible,
+.tree-row-wrap:hover .tree-more {
+  opacity: 1;
+}
+
+.tree-more:hover {
+  background: rgba(148, 163, 184, 0.15);
+  color: #475569;
+}
+
+.folder-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.template-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.template-pill {
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12px;
+  color: #334155;
+  cursor: pointer;
+}

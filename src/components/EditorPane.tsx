@@ -44,81 +44,89 @@ const EditorPane = ({
   value,
   onChange,
   editorStyle,
-}: Props) => (
-  <section className='editor'>
-    <div className='editor-toolbar'>
-      <div className='editor-title-bar'>
-        <div className='editor-title-left'>
-          <input
-            className='doc-title-input'
-            value={titleDraft}
-            onChange={(event) => onTitleChange(event.target.value)}
-            onBlur={onTitleBlur}
-            placeholder='请输入标题'
-            disabled={!canEditTitle}
-          />
-        </div>
-        <div className='editor-title-right'>
-          <div className='editor-menu-wrap'>
-            <button className='tool' onClick={onToggleEditorMenu}>···</button>
-            {editorMenuOpen ? (
-              <div className='menu editor-menu'>
-                {viewMode === 'doc' ? (
-                  <>
-                    {/* <button className='menu-item' onClick={() => { onCloseEditorMenu(); onSaveAsTemplate() }} disabled={!activeDoc}>
-                      设为模板
-                    </button> */}
-                    <button className='menu-item' onClick={() => { onCloseEditorMenu(); onExport('pdf') }} disabled={!activeDoc}>
-                      导出 PDF
-                    </button>
-                    <button className='menu-item' onClick={() => { onCloseEditorMenu(); onExport('word') }} disabled={!activeDoc}>
-                      导出 Word
-                    </button>
-                    <button className='menu-item' onClick={() => { onCloseEditorMenu(); onExport('html') }} disabled={!activeDoc}>
-                      导出 HTML
-                    </button>
-                    <button className='menu-item' onClick={() => { onCloseEditorMenu(); onPrint() }} disabled={!activeDoc}>
-                      打印
-                    </button>
-                    <button className='menu-item danger' onClick={() => { onCloseEditorMenu(); onDeleteDoc() }} disabled={!activeDoc}>
-                      删除
-                    </button>
-                  </>
-                ) : (
-                  <button className='menu-item danger' onClick={() => { onCloseEditorMenu(); onDeleteTemplate() }} disabled={!activeTemplate}>
-                    删除模板
-                  </button>
-                )}
-              </div>
-            ) : null}
+}: Props) => {
+  const hasContent = viewMode === 'doc' ? !!activeDoc : !!activeTemplate
+
+  return (
+    <section className='editor'>
+      <div className='editor-toolbar'>
+        <div className='editor-title-bar'>
+          <div className='editor-title-left'>
+            <input
+              className='doc-title-input'
+              value={titleDraft}
+              onChange={(event) => onTitleChange(event.target.value)}
+              onBlur={onTitleBlur}
+              placeholder='请输入标题'
+              disabled={!canEditTitle}
+            />
+          </div>
+          <div className='editor-title-right'>
+            <div className='editor-menu-wrap'>
+              <button className='tool' onClick={onToggleEditorMenu}>···</button>
+              {editorMenuOpen ? (
+                <div className='menu editor-menu'>
+                  {viewMode === 'doc' ? (
+                    <>
+                      <button className='menu-item' onClick={() => { onCloseEditorMenu(); onSaveAsTemplate() }} disabled={!activeDoc}>
+                        存为模板
+                      </button>
+                      <button className='menu-item' onClick={() => { onCloseEditorMenu(); onExport('pdf') }} disabled={!activeDoc}>
+                        导出 PDF
+                      </button>
+                      <button className='menu-item' onClick={() => { onCloseEditorMenu(); onExport('word') }} disabled={!activeDoc}>
+                        导出 Word
+                      </button>
+                      <button className='menu-item' onClick={() => { onCloseEditorMenu(); onExport('html') }} disabled={!activeDoc}>
+                        导出 HTML
+                      </button>
+                      <button className='menu-item' onClick={() => { onCloseEditorMenu(); onPrint() }} disabled={!activeDoc}>
+                        打印
+                      </button>
+                      <button className='menu-item danger' onClick={() => { onCloseEditorMenu(); onDeleteDoc() }} disabled={!activeDoc}>
+                        删除
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button className='menu-item' onClick={() => { onCloseEditorMenu(); onExport('pdf') }} disabled={!activeTemplate}>
+                        导出 PDF
+                      </button>
+                      <button className='menu-item danger' onClick={() => { onCloseEditorMenu(); onDeleteTemplate() }} disabled={!activeTemplate}>
+                        删除模板
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-   {/*  <div className='editor-meta'>
-      <div className='doc-badge'>文档</div>
-      <div className='doc-info'>
-        更新时间：{activeDoc ? formatDate(activeDoc.updatedAt) : '--'} · 创建时间：{activeDoc ? formatDate(activeDoc.createdAt) : '--'}
+      <div className='editor-canvas'>
+        {!hasContent ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+            <p style={{ color: '#94a3b8', fontSize: 15 }}>选择或创建文档开始编辑</p>
+          </div>
+        ) : (
+          <div className='editor-paper'>
+            {editorStyle ? <style dangerouslySetInnerHTML={{ __html: editorStyle }} /> : null}
+            <CKEditor
+              editor={ClassicEditor as unknown as any}
+              data={value}
+              onChange={(_, editor) => onChange(editor.getData())}
+              config={{
+                ...(EDITOR_CONFIG as any),
+                placeholder: '直接输入内容，或使用模板快速创建文档',
+              } as any}
+            />
+          </div>
+        )}
       </div>
-    </div> */}
-
-    <div className='editor-canvas'>
-      <div className='editor-paper'>
-        {editorStyle ? <style dangerouslySetInnerHTML={{ __html: editorStyle }} /> : null}
-        <CKEditor
-          editor={ClassicEditor as unknown as any}
-          data={value}
-          onChange={(_, editor) => onChange(editor.getData())}
-          config={{
-            ...(EDITOR_CONFIG as any),
-            placeholder: '直接输入内容，或使用模板快速创建文档',
-          } as any}
-        />
-      </div>
-    </div>
-  </section>
-)
+    </section>
+  )
+}
 
 export default EditorPane
 

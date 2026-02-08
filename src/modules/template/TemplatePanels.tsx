@@ -80,37 +80,51 @@ const TemplatePanels = ({
             </div>
             {panel.mode === 'create' ? (
               <div className='panel-template-select'>
-                <div className='panel-tree'>
-                  <TreeView
-                    nodes={templateFolders}
-                    rootDocs={rootTemplates}
-                    rootLabel='全部模板'
-                    rootActive={activeTemplateFolderId === null}
-                    onRootClick={() => onSelectTemplateFolder(null)}
-                    onRootContextMenu={(event) => event.preventDefault()}
-                    selectedFolderId={activeTemplateFolderId}
-                    collapsed={collapsedTemplateFolders}
-                    onToggle={onToggleTemplateFolder}
-                    onFolderMenu={() => {}}
-                    hoverId={hoverFolderId}
-                    setHoverId={setHoverFolderId}
-                    onSelectDoc={(id) => onPickTemplate(id)}
-                    activeDocId={templatePickId}
-                    onDocMenu={() => {}}
-                  />
+                <div className='panel-tree-col'>
+                  <div className='panel-tree-header'>选择模板</div>
+                  <div className='panel-tree'>
+                    <TreeView
+                      nodes={templateFolders}
+                      rootDocs={rootTemplates}
+                      rootLabel='全部模板'
+                      rootActive={activeTemplateFolderId === null}
+                      onRootClick={() => onSelectTemplateFolder(null)}
+                      onRootContextMenu={(event) => event.preventDefault()}
+                      selectedFolderId={activeTemplateFolderId}
+                      collapsed={collapsedTemplateFolders}
+                      onToggle={onToggleTemplateFolder}
+                      onFolderMenu={() => {}}
+                      hoverId={hoverFolderId}
+                      setHoverId={setHoverFolderId}
+                      onSelectDoc={(id) => onPickTemplate(id)}
+                      activeDocId={templatePickId}
+                      onDocMenu={() => {}}
+                    />
+                  </div>
                 </div>
-                <div className='panel-preview'>
-                  {templatePickId ? (
-                    <>
-                      <div className='panel-preview-title'>
-                        {templates.find((tpl) => tpl.id === templatePickId)?.name ?? '模板预览'}
-                      </div>
+                <div className='panel-preview-col'>
+                  <div className='panel-preview-header'>
+                    {templatePickId
+                      ? templates.find((tpl) => tpl.id === templatePickId)?.name ?? '模板预览'
+                      : '模板预览'}
+                  </div>
+                  <div className='panel-preview'>
+                    {templatePickId ? (
                       <div
                         className='panel-preview-body'
                         dangerouslySetInnerHTML={{
                           __html: templates.find((tpl) => tpl.id === templatePickId)?.content ?? '',
                         }}
                       />
+                    ) : (
+                      <div className='panel-preview-placeholder'>
+                        <div className='panel-preview-placeholder-icon'>📄</div>
+                        <div className='panel-preview-placeholder-text'>请在左侧选择模板进行预览</div>
+                      </div>
+                    )}
+                  </div>
+                  {templatePickId && (
+                    <div className='panel-preview-actions'>
                       <button
                         className='primary'
                         onClick={() => {
@@ -118,11 +132,9 @@ const TemplatePanels = ({
                           onClosePanel()
                         }}
                       >
-                        使用该模板
+                        使用该模板创建文档
                       </button>
-                    </>
-                  ) : (
-                    <div className='panel-empty'>请选择左侧模板进行预览</div>
+                    </div>
                   )}
                 </div>
               </div>

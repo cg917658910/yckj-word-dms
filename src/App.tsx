@@ -666,7 +666,11 @@ function App() {
       <MovePanel
         open={Boolean(movePanel)}
         title={movePanel?.mode === 'doc' ? '移动文档到' : '移动模板到'}
-        options={movePanel?.mode === 'doc' ? docMoveOptions : templateMoveOptions}
+        options={
+          movePanel?.mode === 'template'
+            ? templateMoveOptions.map(f => ({ id: f.id, label: f.label }))
+            : docMoveOptions.map(f => ({ id: f.id, label: f.label }))
+        }
         value={moveTargetId}
         onChange={setMoveTargetId}
         onCancel={() => setMovePanel(null)}

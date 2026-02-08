@@ -1,0 +1,224 @@
+/* ===== 编辑器工具栏 ===== */
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  background: #f8fafc;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editor-title-bar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editor-title-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.editor-title-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.link-toggle {
+  color: #2563eb;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.link-toggle:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.dot-btn {
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.editor-format {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 4px;
+}
+
+.tool.icon {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tool,
+.tool-select {
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.tool {
+  cursor: pointer;
+}
+
+.tool:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tool.emphasize {
+  background: linear-gradient(135deg, #ecfeff, #eff6ff);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+/* ===== 编辑器元信息 ===== */
+.editor-meta {
+  padding: 22px 28px 12px;
+}
+
+.doc-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.doc-title-lg {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.doc-title-input {
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+  padding: 0;
+  outline: none;
+  flex: 1;
+}
+
+.doc-title-input:disabled {
+  color: #94a3b8;
+}
+
+.doc-info {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* ===== 编辑器画布 ===== */
+.editor-canvas {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 28px 24px;
+  min-height: 0;
+}
+
+.editor-paper {
+  background: #fff;
+  height: 100%;
+  line-height: 1.5;
+  color: #1f2937;
+}
+
+.editor-paper .ck-editor__editable {
+  min-height: 760px;
+  color: #1f2937;
+  background: #fff;
+}
+
+.editor-paper .ck-content {
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+/* 修复从Word粘贴的白色/隐藏文字 */
+.editor-paper .ck-content span[style*='color: #fff'],
+.editor-paper .ck-content span[style*='color:#fff'],
+.editor-paper .ck-content span[style*='color: rgb(255, 255, 255)'],
+.editor-paper .ck-content span[style*='color: rgb(255,255,255)'],
+.editor-paper .ck-content span[style*='color: white'],
+.editor-paper .ck-content span[style*='color:#ffffff'],
+.editor-paper .ck-content span[style*='color: #ffffff'],
+.editor-paper .ck-content p[style*='color: #fff'],
+.editor-paper .ck-content p[style*='color:#fff'],
+.editor-paper .ck-content p[style*='color: rgb(255, 255, 255)'],
+.editor-paper .ck-content p[style*='color: rgb(255,255,255)'],
+.editor-paper .ck-content p[style*='color: white'],
+.editor-paper .ck-content p[style*='color:#ffffff'],
+.editor-paper .ck-content p[style*='color: #ffffff'] {
+  color: #111827 !important;
+}
+
+/* 表格紧凑样式 */
+/* .editor-paper .ck-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+.editor-paper .ck-content .table {
+  margin: 8px 0;
+}
+
+.editor-paper th,
+.editor-paper td,
+.editor-paper .ck-content table td,
+.editor-paper .ck-content table th,
+.editor-paper .ck-content .table table td,
+.editor-paper .ck-content .table table th {
+  border: 1px solid #000;
+  padding: 3px 5px;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.3;
+  vertical-align: top;
+}
+
+.editor-paper .ck-content table td p,
+.editor-paper .ck-content table th p,
+.editor-paper .ck-content .table table td p,
+.editor-paper .ck-content .table table th p {
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.editor-paper .docx-import {
+  white-space: pre-wrap;
+}
+ */

@@ -1,0 +1,225 @@
+/* ===== 按钮 ===== */
+.primary {
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 16px rgba(79, 70, 229, 0.3);
+}
+
+.primary.danger {
+  background: linear-gradient(135deg, #ef4444, #f97316);
+  box-shadow: 0 8px 16px rgba(239, 68, 68, 0.3);
+}
+
+.primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ghost {
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ghost.small {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ghost.danger {
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #b91c1c;
+  background: rgba(254, 226, 226, 0.4);
+}
+
+/* ===== 搜索框 ===== */
+.search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f1f5f9;
+  padding: 8px 12px;
+  border-radius: 10px;
+}
+
+.search input {
+  border: none;
+  outline: none;
+  background: transparent;
+  flex: 1;
+  font-size: 14px;
+}
+
+.kbd {
+  font-size: 12px;
+  color: #64748b;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+/* ===== 文档卡片 ===== */
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.list-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.list-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding-right: 4px;
+  flex: 1;
+  min-height: 0;
+}
+
+.doc-card {
+  border-radius: 12px;
+  padding: 12px 10px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  animation: fadeIn 600ms ease both;
+  animation-delay: calc(var(--i) * 80ms);
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+}
+
+.doc-card.active {
+  background: #f1f5f9;
+}
+
+.doc-card + .doc-card {
+  border-top: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.doc-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.doc-icon {
+  width: 18px;
+  height: 20px;
+  background: #5b7cff;
+  border-radius: 4px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.doc-icon.small {
+  width: 14px;
+  height: 16px;
+}
+
+.doc-icon::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 10px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 0 rgba(255, 255, 255, 0.7), 0 8px 0 rgba(255, 255, 255, 0.7);
+}
+
+.doc-main {
+  flex: 1;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+
+.doc-more {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+
+.doc-more.visible,
+.doc-card:hover .doc-more {
+  opacity: 1;
+}
+
+.doc-more:hover {
+  background: rgba(148, 163, 184, 0.15);
+  color: #475569;
+}
+
+.doc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.doc-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.doc-subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.doc-tag {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+  display: none;
+}
+
+.doc-meta {
+  font-size: 12px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.doc-meta .dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: #cbd5f5;
+}
