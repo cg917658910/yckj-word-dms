@@ -1,5 +1,5 @@
 ﻿import TreeView from '../../components/TreeView';
-import type { FolderNode, TemplateEditorState, TemplateRow } from '../../types';
+import type { DocSummary, FolderNode, TemplateEditorState, TemplateRow } from '../../types';
 
 type Props = {
   panel: { folderId: number | null; mode: 'create' | 'manage' } | null
@@ -7,6 +7,7 @@ type Props = {
   templateSearch: string
   onSearchChange: (value: string) => void
   templateFolders: FolderNode[]
+  rootTemplates: DocSummary[]
   activeTemplateFolderId: number | null
   onSelectTemplateFolder: (id: number | null) => void
   collapsedTemplateFolders: Set<number>
@@ -37,6 +38,7 @@ const TemplatePanels = ({
   templateSearch,
   onSearchChange,
   templateFolders,
+  rootTemplates,
   activeTemplateFolderId,
   onSelectTemplateFolder,
   collapsedTemplateFolders,
@@ -81,6 +83,7 @@ const TemplatePanels = ({
                 <div className='panel-tree'>
                   <TreeView
                     nodes={templateFolders}
+                    rootDocs={rootTemplates}
                     rootLabel='全部模板'
                     rootActive={activeTemplateFolderId === null}
                     onRootClick={() => onSelectTemplateFolder(null)}
@@ -149,4 +152,3 @@ const TemplatePanels = ({
 )
 
 export default TemplatePanels
-

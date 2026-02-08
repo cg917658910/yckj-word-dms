@@ -39,7 +39,7 @@ interface Window {
   // expose in the `electron/preload/index.ts`
   ipcRenderer: import('electron').IpcRenderer
   api: {
-    print: () => Promise<boolean>
+    print: (payload: { title: string; content: string }) => Promise<boolean>
     exportDoc: (payload: { title: string; content: string; format: 'pdf' | 'word' | 'html' }) => Promise<boolean>
     importTemplates: () => Promise<boolean>
     uploadTemplateFiles: (folderId?: number | null) => Promise<boolean>
@@ -59,11 +59,13 @@ interface Window {
       deleteFolder: (id: number) => Promise<boolean>
       createDoc: (input: { folderId: number | null; title: string; content?: string }) => Promise<DocDetail | null>
       renameDoc: (input: { id: number; title: string }) => Promise<DocDetail | null>
+      moveDoc: (input: { id: number; folderId: number | null }) => Promise<DocDetail | null>
       deleteDoc: (id: number) => Promise<boolean>
       findReplace: (input: { query: string; replace: string; folderId: number | null }) => Promise<number>
       listTemplates: () => Promise<TemplateRow[]>
       createTemplate: (input: { name: string; content: string; folderId?: number | null }) => Promise<number>
       updateTemplate: (input: { id: number; name: string; content: string; folderId?: number | null }) => Promise<boolean>
+      moveTemplate: (input: { id: number; folderId: number | null }) => Promise<boolean>
       deleteTemplate: (id: number) => Promise<boolean>
       useTemplate: (id: number) => Promise<boolean>
       applyTemplate: (payload: { templateId: number; docId: number }) => Promise<DocDetail | null>

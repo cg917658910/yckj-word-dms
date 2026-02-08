@@ -1,12 +1,14 @@
-import 'ckeditor5/ckeditor5.css'
+﻿import 'ckeditor5/ckeditor5.css'
 import 'ckeditor5/translations/zh-cn.js'
 
 import {
+  Alignment,
   Autoformat,
   BlockQuote,
   Bold,
   ClassicEditor,
   Essentials,
+  FontSize,
   Heading,
   Indent,
   IndentBlock,
@@ -26,7 +28,9 @@ export const EDITOR_CONFIG = {
     BlockQuote,
     Bold,
     Essentials,
+    FontSize,
     Heading,
+    Alignment,
     Indent,
     IndentBlock,
     Italic,
@@ -49,9 +53,13 @@ export const EDITOR_CONFIG = {
     '|',
     'heading',
     '|',
+    'fontSize',
+    '|',
     'bold',
     'italic',
     'underline',
+    '|',
+    'alignment',
     '|',
     'link',
     'insertTable',
@@ -71,6 +79,12 @@ export const EDITOR_CONFIG = {
       { model: 'heading3', view: 'h3', title: '标题 3', class: 'ck-heading_heading3' },
       { model: 'heading4', view: 'h4', title: '标题 4', class: 'ck-heading_heading4' },
     ],
+  },
+  alignment: {
+    options: ['left', 'center', 'right', 'justify'],
+  },
+  fontSize: {
+    options: [10, 12, 14, 16, 18, 20, 24, 28, 32],
   },
   table: {
     contentToolbar: ['tableColumn', 'tableRow', 'mergeTableCells'],

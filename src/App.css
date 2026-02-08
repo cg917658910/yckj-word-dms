@@ -1086,6 +1086,7 @@
 
 .panel-field input,
 .panel-field textarea,
+.panel-field select,
 .template-editor {
   border: 1px solid rgba(148, 163, 184, 0.4);
   border-radius: 10px;

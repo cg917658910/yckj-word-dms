@@ -303,6 +303,16 @@ export const useTemplates = ({ openDialog }: Options) => {
     syncTreeWithTemplates(next)
     setActiveTemplate(next[0])
   }
+
+  const handleMoveTemplate = async (templateId: number, folderId: number | null) => {
+    await window.api.db.moveTemplate({ id: templateId, folderId })
+    setTemplates((prev) =>
+      prev.map((tpl) => (tpl.id === templateId ? { ...tpl, folderId, updatedAt: new Date().toISOString() } : tpl)),
+    )
+    if (activeTemplate?.id === templateId) {
+      setActiveTemplate({ ...activeTemplate, folderId })
+    }
+  }
   const handleUploadTemplateFiles = async (folderId: number | null) => {
     try {
       const ok = await window.api.uploadTemplateFiles(folderId)
@@ -454,6 +464,7 @@ export const useTemplates = ({ openDialog }: Options) => {
     handleRenameTemplate,
     handleDeleteTemplate,
     handleCopyTemplate,
+    handleMoveTemplate,
     handleUploadTemplateFiles,
     handleUploadTemplateFolder,
     handleMenuCreateFromTemplate,

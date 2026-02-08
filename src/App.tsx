@@ -1,6 +1,7 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import EditorPane from './components/EditorPane'
+import MovePanel from './components/MovePanel'
 import { useDocuments } from './hooks/useDocuments'
 import { useTemplates } from './hooks/useTemplates'
 import DocFolderMenu from './modules/doc/DocFolderMenu'
@@ -11,7 +12,7 @@ import TemplateFolderMenu from './modules/template/TemplateFolderMenu'
 import TemplateMenu from './modules/template/TemplateMenu'
 import TemplatePanels from './modules/template/TemplatePanels'
 import TemplateSidebar from './modules/template/TemplateSidebar'
-import type { DialogState, MenuState } from './types'
+import type { DialogState, FolderNode, MenuState } from './types'
 import { stripHtml, toDocSummary } from './utils/tree'
 
 function formatDate(value: string) {
@@ -34,6 +35,8 @@ function App() {
   const [editorMenuOpen, setEditorMenuOpen] = useState(false)
   const [findReplaceOpen, setFindReplaceOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'doc' | 'template'>('doc')
+  const [movePanel, setMovePanel] = useState<{ mode: 'doc' | 'template'; itemId: number } | null>(null)
+  const [moveTargetId, setMoveTargetId] = useState<number | null>(null)
 
   const openDialog = (state: DialogState) => {
     setDialog(state)
@@ -82,6 +85,7 @@ function App() {
     handleRenameDoc,
     handleDeleteDoc,
     handleCopyDoc,
+    handleMoveDoc,
     highlight,
     handleDocMenuRename,
     handleDocMenuCopy,
@@ -123,6 +127,7 @@ function App() {
     handleRenameTemplate,
     handleDeleteTemplate,
     handleCopyTemplate,
+    handleMoveTemplate,
     handleUploadTemplateFiles,
     handleUploadTemplateFolder,
     handleMenuCreateFromTemplate,
@@ -153,6 +158,18 @@ function App() {
 
   const composeWithStyle = (html: string, css: string) =>
     css ? `<style data-imported="true">${css}</style>${html}` : html
+
+  const buildMoveOptions = (nodes: FolderNode[], depth = 0, acc: { id: number; label: string }[] = []) => {
+    nodes.forEach((node) => {
+      const prefix = depth ? '— '.repeat(depth) : ''
+      acc.push({ id: node.id, label: `${prefix}${node.name}` })
+      if (node.children.length) buildMoveOptions(node.children, depth + 1, acc)
+    })
+    return acc
+  }
+
+  const docMoveOptions = useMemo(() => buildMoveOptions(folders), [folders])
+  const templateMoveOptions = useMemo(() => buildMoveOptions(templateFolders), [templateFolders])
 
   useEffect(() => {
     if (viewMode !== 'doc') return
@@ -294,7 +311,9 @@ function App() {
   }
 
   const handlePrint = async () => {
-    await window.api.print()
+    if (!activeDoc) return
+    const content = composeWithStyle(editorHtml, editorStyle)
+    await window.api.print({ title: activeDoc.title, content })
   }
 
   const handleExport = async (format: 'pdf' | 'word' | 'html') => {
@@ -388,6 +407,30 @@ function App() {
   const handleTemplateMenuCreateFolder = () => {
     handleFolderMenuClose()
     handleCreateTemplateFolder()
+  }
+
+  const handleOpenMoveDoc = (docId: number) => {
+    setDocMenu(null)
+    const current = docs.find((doc) => doc.id === docId)
+    setMoveTargetId(current?.folderId ?? null)
+    setMovePanel({ mode: 'doc', itemId: docId })
+  }
+
+  const handleOpenMoveTemplate = (templateId: number) => {
+    setTemplateMenu(null)
+    const current = templates.find((tpl) => tpl.id === templateId)
+    setMoveTargetId(current?.folderId ?? null)
+    setMovePanel({ mode: 'template', itemId: templateId })
+  }
+
+  const handleMoveConfirm = async () => {
+    if (!movePanel) return
+    if (movePanel.mode === 'doc') {
+      await handleMoveDoc(movePanel.itemId, moveTargetId ?? null)
+    } else {
+      await handleMoveTemplate(movePanel.itemId, moveTargetId ?? null)
+    }
+    setMovePanel(null)
   }
 
   return (
@@ -567,6 +610,7 @@ function App() {
         onClose={() => setDocMenu(null)}
         onRename={handleDocMenuRename}
         onCopy={handleDocMenuCopy}
+        onMove={handleOpenMoveDoc}
         onDelete={handleDocMenuDelete}
       />
 
@@ -575,6 +619,7 @@ function App() {
         onClose={() => setTemplateMenu(null)}
         onRename={handleTemplateMenuRename}
         onCopy={handleTemplateMenuCopy}
+        onMove={handleOpenMoveTemplate}
         onDelete={handleTemplateMenuDelete}
       />
 
@@ -584,6 +629,7 @@ function App() {
         templateSearch={templateSearch}
         onSearchChange={setTemplateSearch}
         templateFolders={templateFolders}
+        rootTemplates={rootTemplates}
         activeTemplateFolderId={activeTemplateFolderId}
         onSelectTemplateFolder={handleSelectTemplateFolder}
         collapsedTemplateFolders={collapsedTemplateFolders}
@@ -615,6 +661,16 @@ function App() {
           if (!templateEditor) return
           setTemplateEditor({ ...templateEditor, content: value })
         }}
+      />
+
+      <MovePanel
+        open={Boolean(movePanel)}
+        title={movePanel?.mode === 'doc' ? '移动文档到' : '移动模板到'}
+        options={movePanel?.mode === 'doc' ? docMoveOptions : templateMoveOptions}
+        value={moveTargetId}
+        onChange={setMoveTargetId}
+        onCancel={() => setMovePanel(null)}
+        onConfirm={handleMoveConfirm}
       />
 
       <FindReplacePanel
@@ -651,6 +707,8 @@ function App() {
 }
 
 export default App
+
+
 
 
 

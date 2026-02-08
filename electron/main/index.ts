@@ -44,6 +44,60 @@ let win: BrowserWindow | null = null
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
+const normalizeHtml = (input: string) => input.replace(/\u00a0/g, '&nbsp;')
+
+const extractInlineStyles = (input: string) => {
+  const styles: string[] = []
+  const body = input.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (_match, css) => {
+    if (css) styles.push(css)
+    return ''
+  })
+  return { body, styles: styles.join('\n') }
+}
+
+const readCkeditorCss = async () => {
+  try {
+    const fs = await import('node:fs/promises')
+    const cssPath = path.join(app.getAppPath(), 'node_modules', 'ckeditor5', 'ckeditor5.css')
+    return await fs.readFile(cssPath, 'utf8')
+  } catch {
+    return ''
+  }
+}
+
+const buildExportHtml = async (payload: { title: string; content: string }) => {
+  const extracted = extractInlineStyles(payload.content || '')
+  const bodyHtml = normalizeHtml(extracted.body)
+  const ckeditorCss = await readCkeditorCss()
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>${payload.title}</title>
+  <style>
+    ${ckeditorCss}
+    @page { size: A4; margin: 20mm; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; }
+    body {
+      font-family: "Microsoft YaHei", "Noto Sans SC", sans-serif;
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .ck-content { margin: 0; padding: 0; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; vertical-align: middle; }
+    table, tr, td, th { page-break-inside: avoid; }
+    img { max-width: 100%; height: auto; }
+    ${extracted.styles}
+  </style>
+</head>
+<body><div class="ck-content">${bodyHtml}</div></body>
+</html>`
+}
+
 async function createWindow() {
   win = new BrowserWindow({
     title: 'Main window',
@@ -134,60 +188,30 @@ ipcMain.handle('open-win', (_, arg) => {
   }
 })
 
-ipcMain.handle('doc:print', async (event) => {
-  const win = BrowserWindow.fromWebContents(event.sender)
-  if (!win) return false
+ipcMain.handle('doc:print', async (_event, payload: { title: string; content: string }) => {
+  const html = await buildExportHtml(payload)
+  const printWin = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      sandbox: true,
+    },
+  })
+  await printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
   return new Promise((resolve) => {
-    win.webContents.print({ printBackground: true }, (success) => resolve(success))
+    printWin.webContents.print({ printBackground: true }, (success) => {
+      printWin.destroy()
+      resolve(success)
+    })
   })
 })
 
 ipcMain.handle('doc:export', async (event, payload: { title: string; content: string; format: 'pdf' | 'word' | 'html' }) => {
-  const normalizeHtml = (input: string) => input.replace(/\u00a0/g, '&nbsp;')
-  const extractInlineStyles = (input: string) => {
-    const styles: string[] = []
-    const body = input.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (_match, css) => {
-      if (css) styles.push(css)
-      return ''
-    })
-    return { body, styles: styles.join('\n') }
-  }
-  const extracted = extractInlineStyles(payload.content || '')
-  const bodyHtml = normalizeHtml(extracted.body)
   const safeName = (value: string) => {
     const cleaned = value.replace(/[\\/:*?"<>|]+/g, '_').trim()
     return cleaned || '未命名'
   }
   const filename = safeName(payload.title)
-  const html = `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <title>${payload.title}</title>
-  <style>
-    @page { size: A4; margin: 20mm; }
-    * { box-sizing: border-box; }
-    body {
-      font-family: "Microsoft YaHei", "Noto Sans SC", sans-serif;
-      line-height: 1.8;
-      margin: 0;
-      padding: 0;
-    }
-    .page {
-      padding: 20mm;
-      min-height: 297mm;
-      width: 210mm;
-      margin: 0 auto;
-    }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
-    table, tr, td, th { page-break-inside: avoid; }
-    img { max-width: 100%; height: auto; }
-    ${extracted.styles}
-  </style>
-</head>
-<body><div class="page">${bodyHtml}</div></body>
-</html>`
+  const html = await buildExportHtml(payload)
   if (payload.format === 'html') {
     const { canceled, filePath } = await dialog.showSaveDialog({
       title: '导出 HTML',
@@ -214,7 +238,11 @@ ipcMain.handle('doc:export', async (event, payload: { title: string; content: st
       },
     })
     await exportWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
-    const data = await exportWin.webContents.printToPDF({ printBackground: true, pageSize: 'A4' })
+    const data = await exportWin.webContents.printToPDF({
+      printBackground: true,
+      pageSize: 'A4',
+      preferCSSPageSize: true,
+    })
     const fs = await import('node:fs/promises')
     await fs.writeFile(filePath, data)
     exportWin.destroy()
@@ -288,6 +316,10 @@ const toHtmlFromFile = async (filePath: string) => {
       "p[style-name='左对齐'] => p[style='text-align:left']",
       "p[style-name='两端对齐'] => p[style='text-align:justify']",
       "p[style-name='正文'] => p:fresh",
+      "p[alignment='center'] => p[style='text-align:center']",
+      "p[alignment='right'] => p[style='text-align:right']",
+      "p[alignment='left'] => p[style='text-align:left']",
+      "p[alignment='justify'] => p[style='text-align:justify']",
     ]
     const result = await mammoth.convertToHtml(
       { buffer },
@@ -295,10 +327,10 @@ const toHtmlFromFile = async (filePath: string) => {
         includeDefaultStyleMap: true,
         styleMap,
         ignoreEmptyParagraphs: false,
-       /*  convertImage: mammoth.images.inline(async (image: any) => {
+        convertImage: mammoth.images.inline(async (image: any) => {
           const buffer = await image.read('base64')
           return { src: `data:${image.contentType};base64,${buffer}` }
-        }), */
+        }),
       },
     )
     const normalized = result.value

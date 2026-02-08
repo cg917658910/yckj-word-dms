@@ -77,6 +77,11 @@ export type RenameDocInput = {
   title: string
 }
 
+export type MoveDocInput = {
+  id: number
+  folderId: number | null
+}
+
 export type FindReplaceInput = {
   query: string
   replace: string
@@ -94,6 +99,11 @@ export type UpdateTemplateInput = {
   name: string
   content: string
   folderId?: number | null
+}
+
+export type MoveTemplateInput = {
+  id: number
+  folderId: number | null
 }
 
 let db: Database | null = null
@@ -460,6 +470,18 @@ async function renameDocument(input: RenameDocInput) {
   return doc
 }
 
+async function moveDocument(input: MoveDocInput) {
+  const database = await ensureDb()
+  run(database, 'update documents set folder_id = ?, updated_at = datetime(\'now\') where id = ?', [
+    input.folderId,
+    input.id,
+  ])
+  const doc = await getDocument(input.id)
+  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  saveDb(database, dbPath)
+  return doc
+}
+
 async function deleteDocument(id: number) {
   const database = await ensureDb()
   run(database, 'delete from documents where id = ?', [id])
@@ -495,6 +517,17 @@ async function updateTemplate(input: UpdateTemplateInput) {
     input.name,
     input.content,
     input.folderId ?? null,
+    input.id,
+  ])
+  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  saveDb(database, dbPath)
+  return true
+}
+
+async function moveTemplate(input: MoveTemplateInput) {
+  const database = await ensureDb()
+  run(database, 'update templates set folder_id = ?, updated_at = datetime(\'now\') where id = ?', [
+    input.folderId,
     input.id,
   ])
   const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
@@ -570,11 +603,13 @@ export function registerDbIpc() {
   ipcMain.handle('db:delete-template-folder', async (_event, id: number) => deleteTemplateFolder(id))
   ipcMain.handle('db:create-doc', async (_event, input: CreateDocInput) => createDocument(input))
   ipcMain.handle('db:rename-doc', async (_event, input: RenameDocInput) => renameDocument(input))
+  ipcMain.handle('db:move-doc', async (_event, input: MoveDocInput) => moveDocument(input))
   ipcMain.handle('db:delete-doc', async (_event, id: number) => deleteDocument(id))
   ipcMain.handle('db:find-replace', async (_event, input: FindReplaceInput) => findAndReplace(input))
   ipcMain.handle('db:list-templates', async () => listTemplates())
   ipcMain.handle('db:create-template', async (_event, input: CreateTemplateInput) => createTemplate(input))
   ipcMain.handle('db:update-template', async (_event, input: UpdateTemplateInput) => updateTemplate(input))
+  ipcMain.handle('db:move-template', async (_event, input: MoveTemplateInput) => moveTemplate(input))
   ipcMain.handle('db:delete-template', async (_event, id: number) => deleteTemplate(id))
   ipcMain.handle('db:use-template', async (_event, id: number) => useTemplate(id))
   ipcMain.handle('db:apply-template', async (_event, payload: { templateId: number; docId: number }) =>

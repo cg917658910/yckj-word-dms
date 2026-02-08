@@ -1,10 +1,11 @@
-import type { DocMenuState } from '../../types'
+﻿import type { DocMenuState } from '../../types'
 
 type Props = {
   menu: DocMenuState | null
   onClose: () => void
   onRename: (templateId: number) => Promise<void>
   onCopy: (templateId: number) => Promise<void>
+  onMove: (templateId: number) => void
   onDelete: (templateId: number) => Promise<void>
 }
 
@@ -13,6 +14,7 @@ const TemplateMenu = ({
   onClose,
   onRename,
   onCopy,
+  onMove,
   onDelete,
 }: Props) => {
   if (!menu) return null
@@ -20,22 +22,16 @@ const TemplateMenu = ({
     <>
       <div className='menu-backdrop' onClick={onClose} />
       <div className='menu doc-menu' style={{ top: menu.y, left: menu.x }}>
-        <button
-          className='menu-item'
-          onClick={() => onRename(menu.docId)}
-        >
+        <button className='menu-item' onClick={() => onRename(menu.docId)}>
           重命名
         </button>
-        <button
-          className='menu-item'
-          onClick={() => onCopy(menu.docId)}
-        >
+        <button className='menu-item' onClick={() => onCopy(menu.docId)}>
           复制
         </button>
-        <button
-          className='menu-item danger'
-          onClick={() => onDelete(menu.docId)}
-        >
+        <button className='menu-item' onClick={() => onMove(menu.docId)}>
+          移动到
+        </button>
+        <button className='menu-item danger' onClick={() => onDelete(menu.docId)}>
           删除
         </button>
       </div>

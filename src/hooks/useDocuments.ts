@@ -284,6 +284,17 @@ export const useDocuments = ({ openDialog }: Options) => {
     setActiveDoc(detail)
   }
 
+  const handleMoveDoc = async (docId: number, folderId: number | null) => {
+    const detail = await window.api.db.moveDoc({ id: docId, folderId })
+    if (!detail) return
+    setDocs((prev) =>
+      prev.map((doc) => (doc.id === docId ? { ...doc, folderId, updatedAt: detail.updatedAt } : doc)),
+    )
+    if (activeDoc?.id === docId) {
+      setActiveDoc(detail)
+    }
+  }
+
   const folders = useMemo(() => buildTree(folderRows, docs), [folderRows, docs])
   const rootDocs = useMemo(() => docs.filter((doc) => doc.folderId === null), [docs])
 
@@ -358,6 +369,7 @@ export const useDocuments = ({ openDialog }: Options) => {
     handleRenameDoc,
     handleDeleteDoc,
     handleCopyDoc,
+    handleMoveDoc,
     highlight,
     handleDocMenuRename,
     handleDocMenuCopy,
