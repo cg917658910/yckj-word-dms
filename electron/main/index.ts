@@ -144,7 +144,16 @@ ipcMain.handle('doc:print', async (event) => {
 
 ipcMain.handle('doc:export', async (event, payload: { title: string; content: string; format: 'pdf' | 'word' | 'html' }) => {
   const normalizeHtml = (input: string) => input.replace(/\u00a0/g, '&nbsp;')
-  const bodyHtml = normalizeHtml(payload.content || '')
+  const extractInlineStyles = (input: string) => {
+    const styles: string[] = []
+    const body = input.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (_match, css) => {
+      if (css) styles.push(css)
+      return ''
+    })
+    return { body, styles: styles.join('\n') }
+  }
+  const extracted = extractInlineStyles(payload.content || '')
+  const bodyHtml = normalizeHtml(extracted.body)
   const safeName = (value: string) => {
     const cleaned = value.replace(/[\\/:*?"<>|]+/g, '_').trim()
     return cleaned || '未命名'
@@ -156,13 +165,28 @@ ipcMain.handle('doc:export', async (event, payload: { title: string; content: st
   <meta charset="utf-8"/>
   <title>${payload.title}</title>
   <style>
-    body { font-family: "Microsoft YaHei", "Noto Sans SC", sans-serif; line-height: 1.8; padding: 24px; }
+    @page { size: A4; margin: 20mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Microsoft YaHei", "Noto Sans SC", sans-serif;
+      line-height: 1.8;
+      margin: 0;
+      padding: 0;
+    }
+    .page {
+      padding: 20mm;
+      min-height: 297mm;
+      width: 210mm;
+      margin: 0 auto;
+    }
     table { border-collapse: collapse; width: 100%; }
     th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
-    img { max-width: 100%; }
+    table, tr, td, th { page-break-inside: avoid; }
+    img { max-width: 100%; height: auto; }
+    ${extracted.styles}
   </style>
 </head>
-<body>${bodyHtml}</body>
+<body><div class="page">${bodyHtml}</div></body>
 </html>`
   if (payload.format === 'html') {
     const { canceled, filePath } = await dialog.showSaveDialog({
@@ -190,7 +214,7 @@ ipcMain.handle('doc:export', async (event, payload: { title: string; content: st
       },
     })
     await exportWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
-    const data = await exportWin.webContents.printToPDF({ printBackground: true })
+    const data = await exportWin.webContents.printToPDF({ printBackground: true, pageSize: 'A4' })
     const fs = await import('node:fs/promises')
     await fs.writeFile(filePath, data)
     exportWin.destroy()
@@ -257,6 +281,13 @@ const toHtmlFromFile = async (filePath: string) => {
       "p[style-name='Title'] => h1:fresh",
       "p[style-name='Subtitle'] => h2:fresh",
       "p[style-name='Quote'] => blockquote:fresh",
+      "p[style-name='Center'] => p[style='text-align:center']",
+      "p[style-name='Centered'] => p[style='text-align:center']",
+      "p[style-name='居中'] => p[style='text-align:center']",
+      "p[style-name='右对齐'] => p[style='text-align:right']",
+      "p[style-name='左对齐'] => p[style='text-align:left']",
+      "p[style-name='两端对齐'] => p[style='text-align:justify']",
+      "p[style-name='正文'] => p:fresh",
     ]
     const result = await mammoth.convertToHtml(
       { buffer },
@@ -264,7 +295,7 @@ const toHtmlFromFile = async (filePath: string) => {
         includeDefaultStyleMap: true,
         styleMap,
         ignoreEmptyParagraphs: false,
-        /* convertImage: mammoth.images.inline(async (image: any) => {
+       /*  convertImage: mammoth.images.inline(async (image: any) => {
           const buffer = await image.read('base64')
           return { src: `data:${image.contentType};base64,${buffer}` }
         }), */

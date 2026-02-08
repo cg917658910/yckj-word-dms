@@ -1,8 +1,8 @@
-import { rmSync } from 'node:fs'
-import path from 'node:path'
-import { createRequire } from 'node:module'
-import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { rmSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import path from 'node:path'
+import { defineConfig } from 'vite'
 import pkg from './package.json'
 
 const require = createRequire(import.meta.url)
@@ -21,6 +21,10 @@ export default defineConfig(({ command }) => {
       alias: {
         '@': path.join(__dirname, 'src')
       },
+      dedupe: ['ckeditor5'],
+    },
+    optimizeDeps: {
+      include: ['ckeditor5', 'es-toolkit', 'es-toolkit/compat/isEqual', 'fuzzysort', 'extend', 'debug'],
     },
     plugins: [
       react(),

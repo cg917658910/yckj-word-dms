@@ -1,6 +1,5 @@
-﻿import ClassicEditor from '@ckeditor/ckeditor5-build-classic'
-import '@ckeditor/ckeditor5-build-classic/build/translations/zh-cn'
-import { CKEditor } from '@ckeditor/ckeditor5-react'
+﻿import { CKEditor } from '@ckeditor/ckeditor5-react'
+import ClassicEditor, { EDITOR_CONFIG } from '../ckeditor'
 import type { DocDetail, TemplateRow } from '../types'
 
 type Props = {
@@ -66,9 +65,9 @@ const EditorPane = ({
               <div className='menu editor-menu'>
                 {viewMode === 'doc' ? (
                   <>
-                    <button className='menu-item' onClick={() => { onCloseEditorMenu(); onSaveAsTemplate() }} disabled={!activeDoc}>
+                    {/* <button className='menu-item' onClick={() => { onCloseEditorMenu(); onSaveAsTemplate() }} disabled={!activeDoc}>
                       设为模板
-                    </button>
+                    </button> */}
                     <button className='menu-item' onClick={() => { onCloseEditorMenu(); onExport('pdf') }} disabled={!activeDoc}>
                       导出 PDF
                     </button>
@@ -111,37 +110,10 @@ const EditorPane = ({
           editor={ClassicEditor as unknown as any}
           data={value}
           onChange={(_, editor) => onChange(editor.getData())}
-          config={
-            {
-              language: 'zh-cn',
-              placeholder: '直接输入内容，或使用模板快速创建文档',
-              htmlSupport: {
-                allow: [
-                  {
-                    name: /.*/,
-                    attributes: true,
-                    classes: true,
-                    styles: true,
-                  },
-                ],
-              },
-              toolbar: [
-                'undo',
-                'redo',
-                '|',
-                'heading',
-                '|',
-                'bold',
-                'italic',
-                'underline',
-                '|',
-                'bulletedList',
-                'numberedList',
-                'blockQuote',
-                'link',
-              ],
-            } as any
-          }
+          config={{
+            ...(EDITOR_CONFIG as any),
+            placeholder: '直接输入内容，或使用模板快速创建文档',
+          } as any}
         />
       </div>
     </div>
@@ -149,3 +121,4 @@ const EditorPane = ({
 )
 
 export default EditorPane
+
