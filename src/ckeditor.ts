@@ -39,7 +39,10 @@ export const EDITOR_CONFIG = {
     Underline,
   ],
   licenseKey: 'GPL',
-  language: 'zh-cn',
+  language: {
+    ui: 'zh-cn',
+    content: 'zh-cn',
+  },
   toolbar: [
     'undo',
     'redo',
