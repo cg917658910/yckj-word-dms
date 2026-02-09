@@ -44,6 +44,14 @@
 }
 
 .canvas-editor {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.canvas-editor {
   position: relative;
 }
 

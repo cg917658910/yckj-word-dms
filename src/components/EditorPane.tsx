@@ -1,6 +1,6 @@
-import Editor, { ElementType, RowFlex, TitleLevel } from '@hufe921/canvas-editor'
+﻿import Editor, { ElementType, RowFlex, TitleLevel } from '@hufe921/canvas-editor'
 import docxPlugin from '@hufe921/canvas-editor-plugin-docx'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DocDetail, TemplateRow } from '../types'
 import { parseEditorData, serializeEditorData } from '../utils/editor'
 
@@ -51,8 +51,14 @@ const EditorPane = ({
   const editorKey = viewMode === 'doc' ? activeDoc?.id ?? null : activeTemplate?.id ?? null
   const containerRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
   const saveTimerRef = useRef<number | null>(null)
   const lastValueRef = useRef<string>('')
+  const scrollLockRef = useRef(false)
+  const lastScrollRef = useRef({ top: 0, left: 0 })
+  const [tablePickerOpen, setTablePickerOpen] = useState(false)
+  const [tableHover, setTableHover] = useState({ rows: 0, cols: 0 })
+  const savedRangeRef = useRef<any | null>(null)
 
   const getHtml = (instance: Editor) => {
     if (typeof instance.command.getHTML !== 'function') return ''
@@ -97,35 +103,90 @@ const EditorPane = ({
     [onChange, onHtmlChange]
   )
 
-  const run = (fn: (command: Editor['command']) => void) => {
-    if (!editorRef.current) return
-    editorRef.current.command.executeFocus()
-    fn(editorRef.current.command)
-  }
-  const exportDocx = (name: string) =>
-    run((cmd) => (cmd as any).executeExportDocx({ fileName: name || '文档' }))
-
-  const handleSelectTable = async () => {
+  const run = (
+    fn: (command: Editor['command']) => void,
+    options: { preserveSelection?: boolean; ensureFocus?: boolean; range?: any } = {}
+  ) => {
     if (!editorRef.current) return
     const cmd = editorRef.current.command
-    cmd.executeFocus()
+    const preserve = options.preserveSelection !== false
+    let range = preserve ? options.range ?? savedRangeRef.current ?? (cmd as any).getRange?.() : null
+    if (range && (range.startIndex == null || range.endIndex == null || range.startIndex < 0 || range.endIndex < 0)) {
+      range = null
+    }
+    if (options.ensureFocus && !range) {
+      cmd.executeFocus()
+      range = preserve ? (cmd as any).getRange?.() : null
+    }
+    if (preserve && !range) return
+    try {
+      fn(cmd)
+    } catch (error) {
+      console.error(error)
+    } finally {
+      if (preserve && range) {
+        cmd.executeSetRange(
+          range.startIndex,
+          range.endIndex,
+          range.tableId,
+          range.startTdIndex,
+          range.endTdIndex,
+          range.startTrIndex,
+          range.endTrIndex
+        )
+        if (range.tableId) {
+          cmd.executeSetPositionContext(range)
+        }
+      }
+    }
+  }
+  const exportDocx = (name: string) =>
+    run((cmd) => (cmd as any).executeExportDocx({ fileName: name || '鏂囨。' }))
+
+
+  const preserveScroll = () => {
+    const target = scrollRef.current
+    if (!target) return
+    scrollLockRef.current = true
+    lastScrollRef.current = { top: target.scrollTop, left: target.scrollLeft }
+    requestAnimationFrame(() => {
+      if (!scrollRef.current) return
+      scrollRef.current.scrollTop = lastScrollRef.current.top
+      scrollRef.current.scrollLeft = lastScrollRef.current.left
+      window.setTimeout(() => {
+        scrollLockRef.current = false
+      }, 120)
+    })
+  }
+
+  const captureRange = () => {
+    if (!editorRef.current) return
+    const cmd = editorRef.current.command
     const range = (cmd as any).getRange?.()
-    if (range?.tableId) {
-      cmd.executeSetPositionContext(range)
-      cmd.executeTableSelectAll()
+    if (range) savedRangeRef.current = range
+  }
+
+  const handleToolbarMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement
+    if (target.closest('button')) {
+      captureRange()
+      event.preventDefault()
       return
     }
-    const result =
-      (await (cmd as any).getValueAsync?.()) ||
-      (typeof (cmd as any).getValue === 'function' ? (cmd as any).getValue() : null)
-    const list = result?.data?.main ?? []
-    const tableIndex = list.findIndex((item: any) => item?.type === ElementType.TABLE)
-    if (tableIndex < 0) return
-    const table = list[tableIndex]
-    if (!table?.id || !table?.trList?.length || !table.trList[0]?.tdList?.length) return
-    cmd.executeSetRange(tableIndex, tableIndex, table.id, 0, 0, 0, 0)
-    cmd.executeSetPositionContext({ tableId: table.id, startTrIndex: 0, startTdIndex: 0 } as any)
-    cmd.executeTableSelectAll()
+    if (target.closest('select')) {
+      captureRange()
+    }
+  }
+
+  const handleScroll = () => {
+    const target = scrollRef.current
+    if (!target) return
+    if (scrollLockRef.current) {
+      target.scrollTop = lastScrollRef.current.top
+      target.scrollLeft = lastScrollRef.current.left
+      return
+    }
+    lastScrollRef.current = { top: target.scrollTop, left: target.scrollLeft }
   }
 
   useEffect(() => {
@@ -140,9 +201,9 @@ const EditorPane = ({
     editorRef.current?.destroy()
     const data = parseEditorData(value)
     const instance = new Editor(container, data as any, {
-      // 页眉
+      // 椤电湁
       header: { disabled:true },
-      // 页脚
+      // 椤佃剼
       footer: { disabled:true },
     })
     instance.use(docxPlugin)
@@ -150,25 +211,25 @@ const EditorPane = ({
     const docxFileInput = document.querySelector<HTMLInputElement>('#file-docx');
     instance.register.contextMenuList([
       {
-        name: "导入Word",
+        name: "瀵煎叆Word",
         when: (payload) => true,
         callback: (command) => {
           docxFileInput?.click();
         },
       },
       {
-        name: "导出为PDF",
+        name: "瀵煎嚭涓篜DF",
         when: (payload) => true,
         callback: (command) => {
           onExport('pdf') 
         },
       },
       {
-        name: "导出为Word",
+        name: "瀵煎嚭涓篧ord",
         when: (payload) => true,
         callback: (command) => {
           (command as any).executeExportDocx({
-            fileName: titleDraft || '文档',
+            fileName: titleDraft || '鏂囨。',
           });
         },
       },
@@ -229,12 +290,12 @@ const EditorPane = ({
   return (
     <section className='editor'>
       <div className='editor-toolbar'>
-        <div className='editor-format'>
+        <div className='editor-format' onMouseDown={handleToolbarMouseDown}>
           <button className='tool' onClick={() => run((cmd) => cmd.executeUndo())} title='撤销'>
-            ↶
+            Undo
           </button>
           <button className='tool' onClick={() => run((cmd) => cmd.executeRedo())} title='重做'>
-            ↷
+            Redo
           </button>
           <span className='tool-divider' />
           <select
@@ -243,11 +304,11 @@ const EditorPane = ({
             onChange={(event) => {
               const value = event.target.value
               if (value === 'paragraph') {
-                run((cmd) => cmd.executeTitle(null))
+                run((cmd) => cmd.executeTitle(null), { range: savedRangeRef.current })
                 return
               }
               const level = Number(value) as unknown as TitleLevel
-              run((cmd) => cmd.executeTitle(level))
+              run((cmd) => cmd.executeTitle(level), { range: savedRangeRef.current })
             }}
           >
             <option value='paragraph'>正文</option>
@@ -260,7 +321,7 @@ const EditorPane = ({
             defaultValue='14'
             onChange={(event) => {
               const size = Number(event.target.value)
-              if (!Number.isNaN(size)) run((cmd) => cmd.executeSize(size))
+              if (!Number.isNaN(size)) run((cmd) => cmd.executeSize(size), { range: savedRangeRef.current })
             }}
           >
             {[12, 14, 16, 18, 20, 22, 24, 28, 32].map((size) => (
@@ -274,7 +335,7 @@ const EditorPane = ({
             defaultValue='1.5'
             onChange={(event) => {
               const value = Number(event.target.value)
-              if (!Number.isNaN(value)) run((cmd) => cmd.executeRowMargin(value))
+              if (!Number.isNaN(value)) run((cmd) => cmd.executeRowMargin(value), { range: savedRangeRef.current })
             }}
           >
             <option value='1'>1.0</option>
@@ -285,51 +346,48 @@ const EditorPane = ({
             <option value='2.5'>2.5</option>
           </select>
           <span className='tool-divider' />
-          <button className='tool' onClick={() => run((cmd) => cmd.executeBold())} title='加粗'>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeBold(), { range: savedRangeRef.current })} title='加粗'>
             B
           </button>
-          <button className='tool' onClick={() => run((cmd) => cmd.executeItalic())} title='斜体'>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeItalic(), { range: savedRangeRef.current })} title='斜体'>
             I
           </button>
-          <button className='tool' onClick={() => run((cmd) => cmd.executeUnderline())} title='下划线'>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeUnderline(), { range: savedRangeRef.current })} title='下划线'>
             U
           </button>
           <span className='tool-divider' />
           <button
             className='tool'
             onClick={() =>
-              run((cmd) =>
-                cmd.executeInsertElementList([{ type: ElementType.TAB, value: '' }])
+              run(
+                (cmd) => cmd.executeInsertElementList([{ type: ElementType.TAB, value: '' }]),
+                { range: savedRangeRef.current }
               )
             }
             title='缩进'
           >
-            ↦
-          </button>
-          <button className='tool' onClick={() => run((cmd) => cmd.executeBackspace())} title='退格'>
-            ↤
+            IN          </button>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeBackspace(), { range: savedRangeRef.current })} title='退格'>
+            OUT
           </button>
           <span className='tool-divider' />
-          <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.LEFT))} title='左对齐'>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.LEFT), { range: savedRangeRef.current })} title='左对齐'>
             L
           </button>
-          <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.CENTER))} title='居中'>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.CENTER), { range: savedRangeRef.current })} title='灞呬腑'>
             C
           </button>
-          <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.RIGHT))} title='右对齐'>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.RIGHT), { range: savedRangeRef.current })} title='右对齐'>
             R
           </button>
-          <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.JUSTIFY))} title='两端对齐'>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.JUSTIFY), { range: savedRangeRef.current })} title='两端对齐'>
             J
           </button>
           <span className='tool-divider' />
-          <button className='tool' onClick={() => run((cmd) => cmd.executeInsertTable(3, 3))} title='插入表格'>
+          <button className='tool' onClick={() => { captureRange(); setTablePickerOpen(true) }} title='插入表格'>
             表格
           </button>
-          <button className='tool' onClick={() => void handleSelectTable()} title='选中表格'>
-            选表
-          </button>
-          <button className='tool' onClick={() => run((cmd) => cmd.executePrint())} title='打印'>
+          <button className='tool' onClick={() => run((cmd) => cmd.executePrint(), { preserveSelection: false, ensureFocus: true })} title='打印'>
             打印
           </button>
         </div>
@@ -374,7 +432,7 @@ const EditorPane = ({
                         className='menu-item'
                         onClick={() => {
                           onCloseEditorMenu()
-                          run((cmd) => cmd.executePrint())
+                          run((cmd) => cmd.executePrint(), { preserveSelection: false, ensureFocus: true })
                         }}
                         disabled={!activeDoc}
                       >
@@ -401,14 +459,49 @@ const EditorPane = ({
         </div> */}
       </div>
 
-      <div className='editor-canvas'>
+      {tablePickerOpen ? (
+        <div className='table-picker-backdrop' onClick={() => setTablePickerOpen(false)}>
+          <div className='table-picker' onClick={(event) => event.stopPropagation()}>
+            <div className='table-picker-title'>插入表格</div>
+            <div className='table-picker-grid'>
+              {Array.from({ length: 10 }).map((_, row) => (
+                <div key={`row-${row}`} className='table-picker-row'>
+                  {Array.from({ length: 10 }).map((_, col) => {
+                    const rows = row + 1
+                    const cols = col + 1
+                    const active = rows <= tableHover.rows && cols <= tableHover.cols
+                    return (
+                      <button
+                        key={`cell-${row}-${col}`}
+                        type='button'
+                        className={`table-picker-cell${active ? ' active' : ''}`}
+                        onMouseEnter={() => setTableHover({ rows, cols })}
+                        onClick={() => {
+                          setTablePickerOpen(false)
+                          setTableHover({ rows: 0, cols: 0 })
+                          run((cmd) => cmd.executeInsertTable(rows, cols), { preserveSelection: false, ensureFocus: true })
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+            <div className='table-picker-hint'>
+              {tableHover.rows && tableHover.cols ? `${tableHover.rows} 脳 ${tableHover.cols}` : '请选择行列'}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className='editor-canvas' ref={scrollRef} onMouseDown={preserveScroll} onScroll={handleScroll}>
         {!hasContent ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
             <p style={{ color: '#94a3b8', fontSize: 15 }}>选择或创建文档开始编辑</p>
           </div>
         ) : (
-          <div /* className='editor-paper' */>
-            <div className='canvas-editor' ref={containerRef} />
+          <div onMouseDown={preserveScroll}>
+            <div className='canvas-editor' ref={containerRef} onMouseDown={preserveScroll} />
             <input type="file" name="file-docx" style={{ display: 'none' }} id="file-docx" accept=".docx" />
           </div>
         )}
@@ -418,3 +511,7 @@ const EditorPane = ({
 }
 
 export default EditorPane
+
+
+
+
