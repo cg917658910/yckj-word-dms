@@ -51,7 +51,7 @@ const EditorPane = ({
 
   return (
     <section className='editor'>
-      <div className='editor-toolbar'>
+      {/* <div className='editor-toolbar'>
         <div className='editor-title-bar'>
           <div className='editor-title-left'>
             <input
@@ -98,12 +98,36 @@ const EditorPane = ({
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
 
       <div className='editor-canvas'>
-        {!hasContent ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
-            <p style={{ color: '#94a3b8', fontSize: 15 }}>选择或创建文档开始编辑</p>
+        {viewMode === 'doc' ? (
+          <div className='editor-paper doc-file-panel'>
+            <div className='doc-file-card'>
+              <div className='doc-file-title'>{activeDoc?.title ?? '未命名文档'}</div>
+              <div className='doc-file-meta'>
+                <div>
+                  <span>最近更新：</span>
+                  <span>{activeDoc ? formatDate(activeDoc.updatedAt) : '-'}</span>
+                </div>
+                <div>
+                  <span>文件大小：</span>
+                  <span>{activeDoc ? `${(activeDoc.size / 1024).toFixed(1)} KB` : '-'}</span>
+                </div>
+                <div className='doc-file-path'>
+                  <span>文件路径：</span>
+                  <span>{activeDoc?.filePath ?? '未关联文件'}</span>
+                </div>
+              </div>
+              <div className='doc-file-actions'>
+                <button className='primary' onClick={onOpenDoc} disabled={!activeDoc}>
+                  使用本地 Word/WPS 编辑
+                </button>
+                <button onClick={onRevealDoc} disabled={!activeDoc}>
+                  在文件夹中显示
+                </button>
+              </div>
+            </div>
           </div>
         ) : viewMode === 'doc' ? (
           <div className='editor-paper doc-file-panel'>
