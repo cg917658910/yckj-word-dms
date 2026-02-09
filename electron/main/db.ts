@@ -248,7 +248,13 @@ async function seedIfEmpty(database: Database) {
 
   addFolder('易诚无忧', undefined, 1, folderMap)
 
-  const sampleContent = `XX有限公司保密工作领导小组成员履职报告<br/><br/>（20 年度）<br/><br/>姓名：______________ &nbsp;&nbsp;&nbsp;&nbsp; 部门或单位：______________ &nbsp;&nbsp;&nbsp;&nbsp; 职务：______________<br/>初任日期：______________ &nbsp;&nbsp;&nbsp;&nbsp; 序号：______________<br/><br/>填写说明：围绕分工职责和归口责任，具体说明已完成的工作、取得进展、存在问题及建议。`
+  const sampleContent = `<div>
+XX有限公司保密工作领导小组成员履职报告<br/><br/>
+（20 年度）<br/><br/>
+姓名：______________ &nbsp;&nbsp;&nbsp;&nbsp; 部门或单位：______________ &nbsp;&nbsp;&nbsp;&nbsp; 职务：______________<br/>
+初任日期：______________ &nbsp;&nbsp;&nbsp;&nbsp; 序号：______________<br/><br/>
+填写说明：围绕分工职责和归口责任，具体说明已完成的工作、取得进展、存在问题及建议。
+</div>`
 
   run(database, 'insert into documents (folder_id, title, content) values (?, ?, ?)', [
     folderMap.get('易诚无忧') ?? null,
@@ -256,10 +262,22 @@ async function seedIfEmpty(database: Database) {
     sampleContent,
   ])
 
-  run(database, 'insert into templates (name, content) values (?, ?)', ['工作报告', '本周完成：\n下周计划：\n风险问题：'])
-  run(database, 'insert into templates (name, content) values (?, ?)', ['合同模板', '合同编号：\n甲方：\n乙方：\n条款：'])
-  run(database, 'insert into templates (name, content) values (?, ?)', ['周报模板', '本周目标：\n完成情况：\n改进点：'])
-  run(database, 'insert into templates (name, content) values (?, ?)', ['日报模板', '今日事项：\n时间记录：\n待办：'])
+  run(database, 'insert into templates (name, content) values (?, ?)', [
+    '工作报告',
+    '<div>本周完成：<br/>下周计划：<br/>风险问题：</div>',
+  ])
+  run(database, 'insert into templates (name, content) values (?, ?)', [
+    '合同模板',
+    '<div>合同编号：<br/>甲方：<br/>乙方：<br/>条款：</div>',
+  ])
+  run(database, 'insert into templates (name, content) values (?, ?)', [
+    '周报模板',
+    '<div>本周目标：<br/>完成情况：<br/>改进点：</div>',
+  ])
+  run(database, 'insert into templates (name, content) values (?, ?)', [
+    '日报模板',
+    '<div>今日事项：<br/>时间记录：<br/>待办：</div>',
+  ])
 }
 
 async function listFolders(): Promise<FolderRow[]> {

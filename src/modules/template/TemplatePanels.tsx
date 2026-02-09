@@ -1,6 +1,6 @@
 ﻿import TreeView from '../../components/TreeView';
 import type { DocSummary, FolderNode, TemplateEditorState, TemplateRow } from '../../types';
-import { extractEditorText } from '../../utils/editor';
+import { renderEditorHtml } from '../../utils/editor';
 
 type Props = {
   panel: { folderId: number | null; mode: 'create' | 'manage' } | null
@@ -111,9 +111,14 @@ const TemplatePanels = ({
                   </div>
                   <div className='panel-preview'>
                     {templatePickId ? (
-                      <div className='panel-preview-body'>
-                        {extractEditorText(templates.find((tpl) => tpl.id === templatePickId)?.content ?? '') || '（无内容）'}
-                      </div>
+                      <div
+                        className='panel-preview-body'
+                        dangerouslySetInnerHTML={{
+                          __html: renderEditorHtml(
+                            templates.find((tpl) => tpl.id === templatePickId)?.content ?? ''
+                          ),
+                        }}
+                      />
                     ) : (
                       <div className='panel-preview-placeholder'>
                         <div className='panel-preview-placeholder-icon'>📄</div>

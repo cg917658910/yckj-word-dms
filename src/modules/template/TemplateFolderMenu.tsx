@@ -48,8 +48,8 @@ const TemplateFolderMenu = ({
             <button className='menu-item' disabled={disableActions} onClick={onRename}>
               重命名            </button>
             <div className='menu-divider' />
-            <button className='menu-item' onClick={onUploadFiles}>上传文件</button>
-            <button className='menu-item' onClick={onUploadFolder}>上传文件夹</button>
+           {/*  <button className='menu-item' onClick={onUploadFiles}>上传文件</button>
+            <button className='menu-item' onClick={onUploadFolder}>上传文件夹</button> */}
             <button className='menu-item danger' disabled={disableActions} onClick={onDelete}>
               删除
             </button>

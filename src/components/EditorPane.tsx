@@ -6,7 +6,6 @@ import Editor, {
   TitleLevel,
 } from '@hufe921/canvas-editor'
 import docxPlugin from '@hufe921/canvas-editor-plugin-docx'
-import floatingToolbarPlugin from '@hufe921/canvas-editor-plugin-floating-toolbar'
 import { useEffect, useMemo, useRef } from 'react'
 import type { DocDetail, TemplateRow } from '../types'
 import { parseEditorData, serializeEditorData } from '../utils/editor'
@@ -109,7 +108,7 @@ const EditorPane = ({
     fn(editorRef.current.command)
   }
   const exportDocx = (name: string) =>
-    run((cmd) => cmd.executeExportDocx({ fileName: name || '文档' }))
+    run((cmd) => (cmd as any).executeExportDocx({ fileName: name || '文档' }))
 
   useEffect(() => {
     if (!hasContent) {
@@ -122,9 +121,57 @@ const EditorPane = ({
 
     editorRef.current?.destroy()
     const data = parseEditorData(value)
-    const instance = new Editor(container, data, {})
+    const instance = new Editor(container, data as any, {
+      // 页眉
+      header: { disabled:true },
+      // 页脚
+      footer: { disabled:true },
+    })
     instance.use(docxPlugin)
-    instance.use(floatingToolbarPlugin)
+    //instance.use(floatingToolbarPlugin)
+    const docxFileInput = document.querySelector<HTMLInputElement>('#file-docx');
+    instance.register.contextMenuList([
+      {
+        name: "导入Word",
+        when: (payload) => true,
+        callback: (command) => {
+          docxFileInput?.click();
+        },
+      },
+      {
+        name: "导出为PDF",
+        when: (payload) => true,
+        callback: (command) => {
+          onExport('pdf') 
+        },
+      },
+      {
+        name: "导出为Word",
+        when: (payload) => true,
+        callback: (command) => {
+          (command as any).executeExportDocx({
+            fileName: titleDraft || '文档',
+          });
+        },
+      },
+    ])
+    if (docxFileInput) {
+    docxFileInput.onchange = () => {
+      const file = docxFileInput?.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          const buffer = event?.target?.result;
+          if (buffer instanceof ArrayBuffer) {
+            (instance.command as any).executeImportDocx({
+              arrayBuffer: buffer,
+            });
+          }
+          docxFileInput.value = "";
+        };
+      reader.readAsArrayBuffer(file);
+    };
+  }
     editorRef.current = instance
     lastValueRef.current = value
 
@@ -152,7 +199,7 @@ const EditorPane = ({
     if (!editorRef.current) return
     if (value === lastValueRef.current) return
     const data = parseEditorData(value)
-    editorRef.current.command.executeSetValue(data)
+    editorRef.current.command.executeSetValue(data as any)
     lastValueRef.current = value
     if (onHtmlChange) {
       onHtmlChange(getHtml(editorRef.current))
@@ -163,7 +210,7 @@ const EditorPane = ({
 
   const toolbarAttr = useMemo(
     () => ({
-      [EDITOR_COMPONENT]: EditorComponent.TOOLBAR,
+      [EDITOR_COMPONENT]: (EditorComponent as any).TOOLBAR,
     }),
     []
   )
@@ -188,7 +235,7 @@ const EditorPane = ({
                 run((cmd) => cmd.executeTitle(null))
                 return
               }
-              const level = Number(value) as TitleLevel
+              const level = Number(value) as unknown as TitleLevel
               run((cmd) => cmd.executeTitle(level))
             }}
           >
@@ -272,7 +319,7 @@ const EditorPane = ({
             打印
           </button>
         </div>
-        <div className='editor-title-bar'>
+       {/*  <div className='editor-title-bar'>
           <div className='editor-title-left'>
             <input
               className='doc-title-input'
@@ -337,7 +384,7 @@ const EditorPane = ({
               ) : null}
             </div>
           </div>
-        </div>
+        </div> */}
       </div>
 
       <div className='editor-canvas'>
@@ -346,8 +393,9 @@ const EditorPane = ({
             <p style={{ color: '#94a3b8', fontSize: 15 }}>选择或创建文档开始编辑</p>
           </div>
         ) : (
-          <div className='editor-paper'>
+          <div /* className='editor-paper' */>
             <div className='canvas-editor' ref={containerRef} />
+            <input type="file" name="file-docx" style={{ display: 'none' }} id="file-docx" accept=".docx" />
           </div>
         )}
       </div>

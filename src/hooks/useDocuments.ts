@@ -23,9 +23,18 @@ export const useDocuments = ({ openDialog }: Options) => {
 
   const folderMap = useMemo(() => new Map(folderRows.map((row) => [row.id, row])), [folderRows])
 
+  const uniqueDocs = (list: DocSummary[]) => {
+    const seen = new Set<number>()
+    return list.filter((doc) => {
+      if (seen.has(doc.id)) return false
+      seen.add(doc.id)
+      return true
+    })
+  }
+
   const syncTreeWithDocs = (nextDocs: DocSummary[]) => {
     if (folderMutationRef.current) return
-    setDocs(nextDocs)
+    setDocs(uniqueDocs(nextDocs))
   }
 
   const refreshFolders = async (
@@ -43,7 +52,7 @@ export const useDocuments = ({ openDialog }: Options) => {
       ? [...rows.filter((row) => row.id !== pendingRow.id), pendingRow]
       : rows
     setFolderRows(mergedRows)
-    setDocs(list)
+    setDocs(uniqueDocs(list))
     const folderWithDocs = new Set<number>()
     list.forEach((doc) => {
       if (doc.folderId !== null) folderWithDocs.add(doc.folderId)
@@ -71,9 +80,10 @@ export const useDocuments = ({ openDialog }: Options) => {
 
   const refreshDocs = async (folderId: number | null) => {
     const listAll = await window.api.db.listDocs(null)
-    setDocs(listAll)
+    const uniqueListAll = uniqueDocs(listAll)
+    setDocs(uniqueListAll)
     await refreshFolders(listAll, true)
-    const listInFolder = folderId === null ? listAll : listAll.filter((doc) => doc.folderId === folderId)
+    const listInFolder = folderId === null ? uniqueListAll : uniqueListAll.filter((doc) => doc.folderId === folderId)
     const currentId = activeDoc?.id ?? null
     const current = currentId ? listAll.find((doc) => doc.id === currentId) : null
     const canKeepCurrent =
@@ -203,7 +213,7 @@ export const useDocuments = ({ openDialog }: Options) => {
         if (!value) return
         const detail = await window.api.db.createDoc({ folderId, title: value, content: createEmptyEditorContent() })
         if (!detail) return
-        const nextDocs = [toDocSummary(detail), ...docs]
+        const nextDocs = uniqueDocs([toDocSummary(detail), ...docs])
         setDocs(nextDocs)
         setActiveDoc(detail)
       },
@@ -221,7 +231,7 @@ export const useDocuments = ({ openDialog }: Options) => {
         if (!value) return
         const detail = await window.api.db.createDoc({ folderId: activeFolderId, title: value, content: createEmptyEditorContent() })
         if (!detail) return
-        const nextDocs = [toDocSummary(detail), ...docs]
+        const nextDocs = uniqueDocs([toDocSummary(detail), ...docs])
         setDocs(nextDocs)
         setActiveDoc(detail)
       },
@@ -241,7 +251,11 @@ export const useDocuments = ({ openDialog }: Options) => {
         const detail = await window.api.db.renameDoc({ id: activeDoc.id, title: value })
         if (detail) setActiveDoc(detail)
         if (detail) {
-          const nextDocs = docs.map((doc) => (doc.id === detail.id ? { ...doc, title: detail.title, updatedAt: detail.updatedAt } : doc))
+          const nextDocs = uniqueDocs(
+            docs.map((doc) =>
+              doc.id === detail.id ? { ...doc, title: detail.title, updatedAt: detail.updatedAt } : doc
+            )
+          )
           setDocs(nextDocs)
         }
       },
@@ -257,7 +271,7 @@ export const useDocuments = ({ openDialog }: Options) => {
       showInput: false,
       onConfirm: async () => {
         await window.api.db.deleteDoc(activeDoc.id)
-        const nextDocs = docs.filter((doc) => doc.id !== activeDoc.id)
+        const nextDocs = uniqueDocs(docs.filter((doc) => doc.id !== activeDoc.id))
         setDocs(nextDocs)
         const nextInFolder = nextDocs.find((doc) =>
           activeFolderId === null ? true : doc.folderId === activeFolderId
@@ -280,7 +294,7 @@ export const useDocuments = ({ openDialog }: Options) => {
       content: activeDoc.content,
     })
     if (!detail) return
-    const nextDocs = [toDocSummary(detail), ...docs]
+    const nextDocs = uniqueDocs([toDocSummary(detail), ...docs])
     setDocs(nextDocs)
     setActiveDoc(detail)
   }
@@ -289,7 +303,7 @@ export const useDocuments = ({ openDialog }: Options) => {
     const detail = await window.api.db.moveDoc({ id: docId, folderId })
     if (!detail) return
     setDocs((prev) =>
-      prev.map((doc) => (doc.id === docId ? { ...doc, folderId, updatedAt: detail.updatedAt } : doc)),
+      uniqueDocs(prev.map((doc) => (doc.id === docId ? { ...doc, folderId, updatedAt: detail.updatedAt } : doc)))
     )
     if (activeDoc?.id === docId) {
       setActiveDoc(detail)
