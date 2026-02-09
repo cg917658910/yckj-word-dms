@@ -20,6 +20,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@hufe921/canvas-editor": "^0.9.125",
+    "@hufe921/canvas-editor-plugin-docx": "^0.0.5",
+    "@hufe921/canvas-editor-plugin-floating-toolbar": "^0.0.4",
     "html-to-docx": "^1.8.0",
     "iconv-lite": "^0.6.3",
     "mammoth": "^1.11.0",

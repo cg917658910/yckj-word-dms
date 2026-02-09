@@ -1,6 +1,15 @@
-﻿import { useEffect, useRef } from 'react'
-import Editor, { type CanvasEditorBlock } from '@hufe921/canvas-editor'
+import Editor, {
+  EDITOR_COMPONENT,
+  EditorComponent,
+  ElementType,
+  RowFlex,
+  TitleLevel,
+} from '@hufe921/canvas-editor'
+import docxPlugin from '@hufe921/canvas-editor-plugin-docx'
+import floatingToolbarPlugin from '@hufe921/canvas-editor-plugin-floating-toolbar'
+import { useEffect, useMemo, useRef } from 'react'
 import type { DocDetail, TemplateRow } from '../types'
+import { parseEditorData, serializeEditorData } from '../utils/editor'
 
 type Props = {
   viewMode: 'doc' | 'template'
@@ -21,7 +30,7 @@ type Props = {
   formatDate: (value: string) => string
   value: string
   onChange: (value: string) => void
-  editorStyle: string
+  onHtmlChange?: (value: string) => void
 }
 
 const EditorPane = ({
@@ -43,47 +52,226 @@ const EditorPane = ({
   formatDate,
   value,
   onChange,
-  editorStyle,
+  onHtmlChange,
 }: Props) => {
   const hasContent = viewMode === 'doc' ? !!activeDoc : !!activeTemplate
+  const editorKey = viewMode === 'doc' ? activeDoc?.id ?? null : activeTemplate?.id ?? null
   const containerRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor | null>(null)
-  const lastHtmlRef = useRef<string>('')
+  const saveTimerRef = useRef<number | null>(null)
+  const lastValueRef = useRef<string>('')
 
-  const htmlToBlocks = (html: string): CanvasEditorBlock[] => {
-    if (!html) return [{ value: '' }]
-    return [{ value: html }]
+  const getHtml = (instance: Editor) => {
+    if (typeof instance.command.getHTML !== 'function') return ''
+    const result = instance.command.getHTML()
+    if (typeof result === 'string') return result
+    if (result && typeof result === 'object') {
+      return (result as { main?: string }).main ?? ''
+    }
+    return ''
   }
 
-  useEffect(() => {
-    if (!hasContent) return undefined
-    const container = containerRef.current
-    if (!container || editorRef.current) return undefined
-    const initialBlocks = htmlToBlocks(value)
-    editorRef.current = new Editor(container, {
-      main: initialBlocks,
-      placeholder: '直接输入内容，或使用模板快速创建文档',
-      onChange: (_main, html) => {
-        lastHtmlRef.current = html
-        onChange(html)
-      },
-    })
-    return () => {
-      editorRef.current?.destroy()
-      editorRef.current = null
+  const getValue = async (instance: Editor) => {
+    if (typeof instance.command.getValueAsync === 'function') {
+      return instance.command.getValueAsync()
     }
-  }, [hasContent])
+    if (typeof instance.command.getValue === 'function') {
+      return instance.command.getValue()
+    }
+    return null
+  }
+
+  const scheduleSave = useMemo(
+    () => () => {
+      if (!editorRef.current) return
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current)
+      }
+      saveTimerRef.current = window.setTimeout(async () => {
+        if (!editorRef.current) return
+        const result = await getValue(editorRef.current)
+        const data = result?.data ?? null
+        if (data) {
+          const nextValue = serializeEditorData(data)
+          lastValueRef.current = nextValue
+          onChange(nextValue)
+        }
+        if (onHtmlChange) {
+          onHtmlChange(getHtml(editorRef.current))
+        }
+      }, 200)
+    },
+    [onChange, onHtmlChange]
+  )
+
+  const run = (fn: (command: Editor['command']) => void) => {
+    if (!editorRef.current) return
+    fn(editorRef.current.command)
+  }
+  const exportDocx = (name: string) =>
+    run((cmd) => cmd.executeExportDocx({ fileName: name || '文档' }))
 
   useEffect(() => {
-    const instance = editorRef.current
-    if (!instance) return
-    if (value === lastHtmlRef.current) return
-    instance.setData(htmlToBlocks(value))
-  }, [value])
+    if (!hasContent) {
+      editorRef.current?.destroy()
+      editorRef.current = null
+      return undefined
+    }
+    const container = containerRef.current
+    if (!container) return undefined
+
+    editorRef.current?.destroy()
+    const data = parseEditorData(value)
+    const instance = new Editor(container, data, {})
+    instance.use(docxPlugin)
+    instance.use(floatingToolbarPlugin)
+    editorRef.current = instance
+    lastValueRef.current = value
+
+    const handleChange = scheduleSave
+    if ((instance as { listener?: { contentChange?: () => void } }).listener) {
+      ;(instance as { listener: { contentChange?: () => void } }).listener.contentChange = handleChange
+    }
+    instance.eventBus.on('contentChange', handleChange)
+
+    if (onHtmlChange) {
+      onHtmlChange(getHtml(instance))
+    }
+
+    return () => {
+      instance.eventBus.off?.('contentChange', handleChange)
+      instance.destroy()
+      if (editorRef.current === instance) {
+        editorRef.current = null
+      }
+    }
+  }, [editorKey, hasContent])
+
+  useEffect(() => {
+    if (!hasContent) return
+    if (!editorRef.current) return
+    if (value === lastValueRef.current) return
+    const data = parseEditorData(value)
+    editorRef.current.command.executeSetValue(data)
+    lastValueRef.current = value
+    if (onHtmlChange) {
+      onHtmlChange(getHtml(editorRef.current))
+    }
+  }, [value, hasContent])
+
+  // value changes are driven by editor events, avoid re-initializing on every update
+
+  const toolbarAttr = useMemo(
+    () => ({
+      [EDITOR_COMPONENT]: EditorComponent.TOOLBAR,
+    }),
+    []
+  )
 
   return (
     <section className='editor'>
-      <div className='editor-toolbar'>
+      <div className='editor-toolbar' {...toolbarAttr}>
+        <div className='editor-format'>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeUndo())} title='撤销'>
+            ↶
+          </button>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeRedo())} title='重做'>
+            ↷
+          </button>
+          <span className='tool-divider' />
+          <select
+            className='tool-select'
+            defaultValue='paragraph'
+            onChange={(event) => {
+              const value = event.target.value
+              if (value === 'paragraph') {
+                run((cmd) => cmd.executeTitle(null))
+                return
+              }
+              const level = Number(value) as TitleLevel
+              run((cmd) => cmd.executeTitle(level))
+            }}
+          >
+            <option value='paragraph'>正文</option>
+            <option value={TitleLevel.FIRST}>标题 1</option>
+            <option value={TitleLevel.SECOND}>标题 2</option>
+            <option value={TitleLevel.THIRD}>标题 3</option>
+          </select>
+          <select
+            className='tool-select'
+            defaultValue='14'
+            onChange={(event) => {
+              const size = Number(event.target.value)
+              if (!Number.isNaN(size)) run((cmd) => cmd.executeSize(size))
+            }}
+          >
+            {[12, 14, 16, 18, 20, 22, 24, 28, 32].map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+          <select
+            className='tool-select'
+            defaultValue='1.5'
+            onChange={(event) => {
+              const value = Number(event.target.value)
+              if (!Number.isNaN(value)) run((cmd) => cmd.executeRowMargin(value))
+            }}
+          >
+            <option value='1'>1.0</option>
+            <option value='1.2'>1.2</option>
+            <option value='1.5'>1.5</option>
+            <option value='1.75'>1.75</option>
+            <option value='2'>2.0</option>
+            <option value='2.5'>2.5</option>
+          </select>
+          <span className='tool-divider' />
+          <button className='tool' onClick={() => run((cmd) => cmd.executeBold())} title='加粗'>
+            B
+          </button>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeItalic())} title='斜体'>
+            I
+          </button>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeUnderline())} title='下划线'>
+            U
+          </button>
+          <span className='tool-divider' />
+          <button
+            className='tool'
+            onClick={() =>
+              run((cmd) =>
+                cmd.executeInsertElementList([{ type: ElementType.TAB, value: '' }])
+              )
+            }
+            title='缩进'
+          >
+            ↦
+          </button>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeBackspace())} title='退格'>
+            ↤
+          </button>
+          <span className='tool-divider' />
+          <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.LEFT))} title='左对齐'>
+            L
+          </button>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.CENTER))} title='居中'>
+            C
+          </button>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.RIGHT))} title='右对齐'>
+            R
+          </button>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.JUSTIFY))} title='两端对齐'>
+            J
+          </button>
+          <span className='tool-divider' />
+          <button className='tool' onClick={() => run((cmd) => cmd.executeInsertTable(3, 3))} title='插入表格'>
+            表格
+          </button>
+          <button className='tool' onClick={() => run((cmd) => cmd.executePrint())} title='打印'>
+            打印
+          </button>
+        </div>
         <div className='editor-title-bar'>
           <div className='editor-title-left'>
             <input
@@ -108,13 +296,27 @@ const EditorPane = ({
                       <button className='menu-item' onClick={() => { onCloseEditorMenu(); onExport('pdf') }} disabled={!activeDoc}>
                         导出 PDF
                       </button>
-                      <button className='menu-item' onClick={() => { onCloseEditorMenu(); onExport('word') }} disabled={!activeDoc}>
+                      <button
+                        className='menu-item'
+                        onClick={() => {
+                          onCloseEditorMenu()
+                          if (activeDoc) exportDocx(activeDoc.title)
+                        }}
+                        disabled={!activeDoc}
+                      >
                         导出 Word
                       </button>
                       <button className='menu-item' onClick={() => { onCloseEditorMenu(); onExport('html') }} disabled={!activeDoc}>
                         导出 HTML
                       </button>
-                      <button className='menu-item' onClick={() => { onCloseEditorMenu(); onPrint() }} disabled={!activeDoc}>
+                      <button
+                        className='menu-item'
+                        onClick={() => {
+                          onCloseEditorMenu()
+                          run((cmd) => cmd.executePrint())
+                        }}
+                        disabled={!activeDoc}
+                      >
                         打印
                       </button>
                       <button className='menu-item danger' onClick={() => { onCloseEditorMenu(); onDeleteDoc() }} disabled={!activeDoc}>
@@ -145,7 +347,6 @@ const EditorPane = ({
           </div>
         ) : (
           <div className='editor-paper'>
-            {editorStyle ? <style dangerouslySetInnerHTML={{ __html: editorStyle }} /> : null}
             <div className='canvas-editor' ref={containerRef} />
           </div>
         )}

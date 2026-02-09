@@ -20,6 +20,16 @@
   animation: rise 700ms ease both;
 }
 
+.editor-canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.editor-paper {
+  min-height: 100%;
+}
+
 .sidebar {
   padding: 18px 0px 18px 18px;
   gap: 16px;

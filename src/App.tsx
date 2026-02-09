@@ -13,7 +13,8 @@ import TemplateMenu from './modules/template/TemplateMenu'
 import TemplatePanels from './modules/template/TemplatePanels'
 import TemplateSidebar from './modules/template/TemplateSidebar'
 import type { DialogState, FolderNode, MenuState } from './types'
-import { stripHtml, toDocSummary } from './utils/tree'
+import { toDocSummary } from './utils/tree'
+import { createEmptyEditorContent, extractEditorText } from './utils/editor'
 
 function formatDate(value: string) {
   if (!value) return ''
@@ -30,8 +31,8 @@ function App() {
   const [menuSubOpen, setMenuSubOpen] = useState(false)
   const [hoverFolderId, setHoverFolderId] = useState<number | null>(null)
   const [titleDraft, setTitleDraft] = useState('')
+  const [editorData, setEditorData] = useState(createEmptyEditorContent())
   const [editorHtml, setEditorHtml] = useState('')
-  const [editorStyle, setEditorStyle] = useState('')
   const [editorMenuOpen, setEditorMenuOpen] = useState(false)
   const [findReplaceOpen, setFindReplaceOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'doc' | 'template'>('doc')
@@ -146,19 +147,6 @@ function App() {
     boot()
   }, [])
 
-  const extractImportedStyle = (html: string) => {
-    if (!html) return { html: '', css: '' }
-    const styles: string[] = []
-    const cleaned = html.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (_match, css) => {
-      if (css && typeof css === 'string') styles.push(css)
-      return ''
-    })
-    return { html: cleaned.trim(), css: styles.join('\n').trim() }
-  }
-
-  const composeWithStyle = (html: string, css: string) =>
-    css ? `<style data-imported="true">${css}</style>${html}` : html
-
   const buildMoveOptions = (nodes: FolderNode[], depth = 0, acc: { id: number; label: string }[] = []) => {
     nodes.forEach((node) => {
       const prefix = depth ? '— '.repeat(depth) : ''
@@ -173,34 +161,32 @@ function App() {
 
   useEffect(() => {
     if (viewMode !== 'doc') return
-    if (!activeDoc) return
-    const parsed = extractImportedStyle(activeDoc.content || '')
-    setEditorStyle(parsed.css)
-    setEditorHtml(parsed.html)
+    if (!activeDoc) {
+      setEditorData(createEmptyEditorContent())
+      setEditorHtml('')
+      return
+    }
+    setEditorData(activeDoc.content || createEmptyEditorContent())
+    setEditorHtml('')
     setTitleDraft(activeDoc.title)
   }, [activeDoc, viewMode])
 
   useEffect(() => {
     if (viewMode !== 'template') return
-    if (!activeTemplate) return
-    const parsed = extractImportedStyle(activeTemplate.content || '')
-    setEditorStyle(parsed.css)
-    setEditorHtml(parsed.html)
+    if (!activeTemplate) {
+      setEditorData(createEmptyEditorContent())
+      setEditorHtml('')
+      return
+    }
+    setEditorData(activeTemplate.content || createEmptyEditorContent())
+    setEditorHtml('')
     setTitleDraft(activeTemplate.name)
   }, [activeTemplate, viewMode])
-
-  useEffect(() => {
-    if (viewMode === 'doc') {
-      setTitleDraft(activeDoc?.title ?? '')
-    } else {
-      setTitleDraft(activeTemplate?.name ?? '')
-    }
-  }, [viewMode, activeDoc, activeTemplate])
 
   const handleSave = async () => {
     if (viewMode === 'doc') {
       if (!activeDoc) return
-      const content = composeWithStyle(editorHtml, editorStyle)
+      const content = editorData || createEmptyEditorContent()
       const next = await window.api.db.saveDoc({
         id: activeDoc.id,
         title: titleDraft.trim() || activeDoc.title,
@@ -208,9 +194,16 @@ function App() {
       })
       setActiveDoc(next)
       if (next) {
-        const nextDocs = docs.map((doc) =>
-          doc.id === next.id ? { ...doc, title: next.title, updatedAt: next.updatedAt, snippet: stripHtml(next.content || '').slice(0, 120) } : doc
-        )
+          const nextDocs = docs.map((doc) =>
+            doc.id === next.id
+              ? {
+                  ...doc,
+                  title: next.title,
+                  updatedAt: next.updatedAt,
+                  snippet: extractEditorText(next.content || '').slice(0, 120),
+                }
+              : doc
+          )
         syncTreeWithDocs(nextDocs)
       }
       return
@@ -220,7 +213,7 @@ function App() {
       const next = {
         ...activeTemplate,
         name: titleDraft.trim() || activeTemplate.name,
-        content: composeWithStyle(editorHtml, editorStyle),
+        content: editorData || createEmptyEditorContent(),
       }
       await window.api.db.updateTemplate({
         id: activeTemplate.id,
@@ -248,7 +241,7 @@ function App() {
       return () => clearTimeout(timer)
     }
     return undefined
-  }, [editorHtml, titleDraft, viewMode, activeDoc, activeTemplate])
+  }, [editorData, titleDraft, viewMode, activeDoc, activeTemplate])
 
   const handleTitleBlur = async () => {
     if (!titleDraft.trim()) {
@@ -262,7 +255,7 @@ function App() {
       const detail = await window.api.db.renameDoc({ id: activeDoc.id, title: titleDraft.trim() })
       if (detail) {
         setActiveDoc(detail)
-        setEditorHtml(detail.content || '')
+        setEditorData(detail.content || createEmptyEditorContent())
         const nextDocs = docs.map((doc) => (doc.id === detail.id ? { ...doc, title: detail.title, updatedAt: detail.updatedAt } : doc))
         syncTreeWithDocs(nextDocs)
       }
@@ -292,7 +285,7 @@ function App() {
     const nextDocs = [toDocSummary(detail), ...docs]
     syncTreeWithDocs(nextDocs)
     setActiveDoc(detail)
-    setEditorHtml(detail.content || '')
+    setEditorData(detail.content || createEmptyEditorContent())
   }
 
   const handleOpenTemplatePanel = (folderId: number | null, mode: 'create' | 'manage') => {
@@ -303,22 +296,22 @@ function App() {
   const handleSaveAsTemplate = async () => {
     if (!activeDoc) return
     setTemplatePanel({ folderId: activeTemplateFolderId ?? null, mode: 'create' })
-    setTemplateEditor({
-      mode: 'create',
-      name: activeDoc.title,
-      content: composeWithStyle(editorHtml, editorStyle),
-    })
+      setTemplateEditor({
+        mode: 'create',
+        name: activeDoc.title,
+        content: editorData || createEmptyEditorContent(),
+      })
   }
 
   const handlePrint = async () => {
     if (!activeDoc) return
-    const content = composeWithStyle(editorHtml, editorStyle)
+    const content = editorHtml
     await window.api.print({ title: activeDoc.title, content })
   }
 
   const handleExport = async (format: 'pdf' | 'word' | 'html') => {
     if (!activeDoc) return
-    const content = composeWithStyle(editorHtml, editorStyle)
+    const content = editorHtml
     const res = await window.api.exportDoc({
       title: activeDoc.title,
       content,
@@ -543,9 +536,9 @@ function App() {
           activeDoc={activeDoc}
           activeTemplate={activeTemplate}
           formatDate={formatDate}
-          value={editorHtml}
-          onChange={setEditorHtml}
-          editorStyle={editorStyle}
+          value={editorData}
+          onChange={setEditorData}
+          onHtmlChange={setEditorHtml}
         />
 
       {dialog ? (

@@ -9,6 +9,7 @@ import type {
   TemplateRow,
 } from '../types'
 import { buildTree, collectDescendantIds, collectDescendantsOnly, toTemplateSummary } from '../utils/tree'
+import { createEmptyEditorContent } from '../utils/editor'
 
 type Options = {
   openDialog: (state: DialogState) => void
@@ -187,10 +188,10 @@ export const useTemplates = ({ openDialog }: Options) => {
       showInput: true,
       onConfirm: async (value) => {
         if (!value) return
-        const id = await window.api.db.createTemplate({ name: value, content: '', folderId })
+        const id = await window.api.db.createTemplate({ name: value, content: createEmptyEditorContent(), folderId })
         if (!id) return
         const next = [
-          { id, name: value, content: '', updatedAt: new Date().toISOString(), folderId },
+          { id, name: value, content: createEmptyEditorContent(), updatedAt: new Date().toISOString(), folderId },
           ...templates,
         ]
         syncTreeWithTemplates(next)

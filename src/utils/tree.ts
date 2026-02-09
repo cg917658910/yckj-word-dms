@@ -1,4 +1,5 @@
 import type { DocDetail, DocSummary, FolderNode, FolderRow, TemplateRow } from '../types'
+import { extractEditorText } from './editor'
 
 export const buildTree = (rows: FolderRow[], docs: DocSummary[]): FolderNode[] => {
   const map = new Map<number, FolderNode>()
@@ -59,14 +60,8 @@ export const buildTree = (rows: FolderRow[], docs: DocSummary[]): FolderNode[] =
   return roots
 }
 
-export const stripHtml = (html: string) =>
-  html
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
 export const toDocSummary = (detail: DocDetail): DocSummary => {
-  const text = stripHtml(detail.content || '')
+  const text = extractEditorText(detail.content || '')
   return {
     id: detail.id,
     folderId: detail.folderId ?? null,
@@ -79,7 +74,7 @@ export const toDocSummary = (detail: DocDetail): DocSummary => {
 }
 
 export const toTemplateSummary = (template: TemplateRow): DocSummary => {
-  const text = stripHtml(template.content || '')
+  const text = extractEditorText(template.content || '')
   return {
     id: template.id,
     folderId: template.folderId ?? null,

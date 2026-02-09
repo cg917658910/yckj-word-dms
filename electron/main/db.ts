@@ -116,7 +116,7 @@ async function ensureDb() {
   if (db) return db
   if (sqlReady) return sqlReady
 
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
 
   sqlReady = (async () => {
     const SQL = await initSqlJs({
@@ -311,7 +311,7 @@ async function listDocuments(folderId: number | null): Promise<DocSummary[]> {
       size: row.size,
     }
   })
-}
+} 
 
 async function findAndReplace(input: FindReplaceInput) {
   const database = await ensureDb()
@@ -344,7 +344,7 @@ async function findAndReplace(input: FindReplaceInput) {
       updated += 1
     }
   })
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return updated
 }
@@ -366,7 +366,7 @@ async function saveDocument(input: { id: number; title: string; content: string 
     input.id,
   ])
   const doc = await getDocument(input.id)
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return doc
 }
@@ -379,7 +379,7 @@ async function createFolder(input: CreateFolderInput) {
     Date.now(),
   ])
   const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return Number(row?.id ?? 0)
 }
@@ -392,7 +392,7 @@ export async function createTemplateFolder(input: CreateTemplateFolderInput) {
     Date.now(),
   ])
   const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return Number(row?.id ?? 0)
 }
@@ -400,7 +400,7 @@ export async function createTemplateFolder(input: CreateTemplateFolderInput) {
 async function renameFolder(input: RenameFolderInput) {
   const database = await ensureDb()
   run(database, 'update folders set name = ? where id = ?', [input.name, input.id])
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return true
 }
@@ -408,7 +408,7 @@ async function renameFolder(input: RenameFolderInput) {
 export async function renameTemplateFolder(input: RenameTemplateFolderInput) {
   const database = await ensureDb()
   run(database, 'update template_folders set name = ? where id = ?', [input.name, input.id])
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return true
 }
@@ -416,7 +416,7 @@ export async function renameTemplateFolder(input: RenameTemplateFolderInput) {
 async function deleteFolder(id: number) {
   const database = await ensureDb()
   run(database, 'delete from folders where id = ?', [id])
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return true
 }
@@ -424,7 +424,7 @@ async function deleteFolder(id: number) {
 export async function deleteTemplateFolder(id: number) {
   const database = await ensureDb()
   run(database, 'delete from template_folders where id = ?', [id])
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return true
 }
@@ -453,7 +453,7 @@ async function createDocument(input: CreateDocInput) {
   ])
   const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
   const doc = row?.id ? await getDocument(Number(row.id)) : null
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return doc
 }
@@ -465,7 +465,7 @@ async function renameDocument(input: RenameDocInput) {
     input.id,
   ])
   const doc = await getDocument(input.id)
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return doc
 }
@@ -477,7 +477,7 @@ async function moveDocument(input: MoveDocInput) {
     input.id,
   ])
   const doc = await getDocument(input.id)
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return doc
 }
@@ -485,7 +485,7 @@ async function moveDocument(input: MoveDocInput) {
 async function deleteDocument(id: number) {
   const database = await ensureDb()
   run(database, 'delete from documents where id = ?', [id])
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return true
 }
@@ -506,7 +506,7 @@ export async function createTemplate(input: CreateTemplateInput) {
     input.folderId ?? null,
   ])
   const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return Number(row?.id ?? 0)
 }
@@ -519,7 +519,7 @@ async function updateTemplate(input: UpdateTemplateInput) {
     input.folderId ?? null,
     input.id,
   ])
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return true
 }
@@ -530,7 +530,7 @@ async function moveTemplate(input: MoveTemplateInput) {
     input.folderId,
     input.id,
   ])
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return true
 }
@@ -538,7 +538,7 @@ async function moveTemplate(input: MoveTemplateInput) {
 async function deleteTemplate(id: number) {
   const database = await ensureDb()
   run(database, 'delete from templates where id = ?', [id])
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return true
 }
@@ -551,7 +551,7 @@ export async function importTemplates(items: Array<{ name: string; content: stri
       item.content,
     ])
   })
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return true
 }
@@ -568,7 +568,7 @@ async function applyTemplate(payload: { templateId: number; docId: number }) {
     payload.templateId,
   ])
   const doc = await getDocument(payload.docId)
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return doc
 }
@@ -578,7 +578,7 @@ async function useTemplate(id: number) {
   run(database, 'update templates set usage_count = coalesce(usage_count,0) + 1, last_used_at = datetime(\'now\') where id = ?', [
     id,
   ])
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  const dbPath = path.join(app.getPath('userData'), 'cg-word-tool.sqlite')
   saveDb(database, dbPath)
   return true
 }

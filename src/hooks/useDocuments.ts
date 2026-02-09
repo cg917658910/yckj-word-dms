@@ -1,7 +1,8 @@
 ﻿import { Fragment, createElement, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DialogState, DocDetail, DocMenuState, DocSummary, FolderRow } from '../types'
-import { buildTree, collectDescendantIds, collectDescendantsOnly, stripHtml, toDocSummary } from '../utils/tree'
+import { buildTree, collectDescendantIds, collectDescendantsOnly, toDocSummary } from '../utils/tree'
+import { createEmptyEditorContent } from '../utils/editor'
 
 type Options = {
   openDialog: (state: DialogState) => void
@@ -200,7 +201,7 @@ export const useDocuments = ({ openDialog }: Options) => {
       showInput: true,
       onConfirm: async (value) => {
         if (!value) return
-        const detail = await window.api.db.createDoc({ folderId, title: value, content: '' })
+        const detail = await window.api.db.createDoc({ folderId, title: value, content: createEmptyEditorContent() })
         if (!detail) return
         const nextDocs = [toDocSummary(detail), ...docs]
         setDocs(nextDocs)
@@ -218,7 +219,7 @@ export const useDocuments = ({ openDialog }: Options) => {
       showInput: true,
       onConfirm: async (value) => {
         if (!value) return
-        const detail = await window.api.db.createDoc({ folderId: activeFolderId, title: value, content: '' })
+        const detail = await window.api.db.createDoc({ folderId: activeFolderId, title: value, content: createEmptyEditorContent() })
         if (!detail) return
         const nextDocs = [toDocSummary(detail), ...docs]
         setDocs(nextDocs)

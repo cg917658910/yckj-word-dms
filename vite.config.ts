@@ -20,7 +20,6 @@ export default defineConfig(({ command }) => {
     resolve: {
       alias: {
         '@': path.join(__dirname, 'src'),
-        '@hufe921/canvas-editor': path.join(__dirname, 'src/vendor/canvas-editor'),
       },
     },
     optimizeDeps: {
