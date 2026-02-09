@@ -34,3 +34,4 @@ yarn.lock
 .vs/
 /doc/
 /tmp/
+/data/

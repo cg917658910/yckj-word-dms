@@ -145,7 +145,8 @@ const require = createRequire(import.meta.url)
 const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm')
 
 const getDataDir = () => {
-  const dir = path.join(app.getPath('userData'), 'data')
+  //const dir = path.join(app.getPath('userData'), 'data')
+  const dir =  path.join(process.env.APP_ROOT, 'data')
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true })
   }
@@ -201,10 +202,10 @@ async function ensureDb() {
   if (sqlReady) return sqlReady
 
   const dbPath = getDbPath()
-  const legacyPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  /* const legacyPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
   if (!fs.existsSync(dbPath) && fs.existsSync(legacyPath)) {
     fs.copyFileSync(legacyPath, dbPath)
-  }
+  } */
 
   sqlReady = (async () => {
     const SQL = await initSqlJs({
