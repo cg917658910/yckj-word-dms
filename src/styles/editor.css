@@ -153,6 +153,75 @@
   color: #1f2937;
 }
 
+.editor-paper.doc-file-panel {
+  background: transparent;
+  height: auto;
+}
+
+.doc-file-card {
+  width: min(880px, 100%);
+  margin: 24px auto;
+  background: #fff;
+  padding: 32px;
+  border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+}
+
+.doc-file-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 16px;
+}
+
+.doc-file-meta {
+  display: grid;
+  gap: 10px;
+  font-size: 14px;
+  color: #475569;
+  margin-bottom: 20px;
+}
+
+.doc-file-meta span:first-child {
+  color: #64748b;
+}
+
+.doc-file-path {
+  word-break: break-all;
+}
+
+.doc-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.doc-file-actions button {
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid #cbd5f5;
+  background: #f8fafc;
+  color: #1e293b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.doc-file-actions button:hover {
+  border-color: #94a3b8;
+  background: #eef2ff;
+}
+
+.doc-file-actions button.primary {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  border-color: transparent;
+  color: #fff;
+}
+
+.doc-file-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .editor-paper .ck-editor__editable {
   min-height: 760px;
   color: #1f2937;

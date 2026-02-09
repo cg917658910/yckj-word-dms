@@ -3,7 +3,6 @@ import type {
   DialogState,
   DocDetail,
   DocMenuState,
-  TemplateEditorState,
   TemplateFolderRow,
   TemplatePanelState,
   TemplateRow,
@@ -23,7 +22,6 @@ export const useTemplates = ({ openDialog }: Options) => {
   const [activeTemplate, setActiveTemplate] = useState<TemplateRow | null>(null)
   const [collapsedTemplateFolders, setCollapsedTemplateFolders] = useState<Set<number>>(new Set())
   const [templatePanel, setTemplatePanel] = useState<TemplatePanelState | null>(null)
-  const [templateEditor, setTemplateEditor] = useState<TemplateEditorState | null>(null)
   const [templateSearch, setTemplateSearch] = useState('')
   const [templatePickId, setTemplatePickId] = useState<number | null>(null)
   const [templateMenu, setTemplateMenu] = useState<DocMenuState | null>(null)
@@ -189,55 +187,29 @@ export const useTemplates = ({ openDialog }: Options) => {
         if (!value) return
         const id = await window.api.db.createTemplate({ name: value, content: '', folderId })
         if (!id) return
-        const next = [
-          { id, name: value, content: '', updatedAt: new Date().toISOString(), folderId },
-          ...templates,
-        ]
+        const next = await window.api.db.listTemplates()
         syncTreeWithTemplates(next)
-        setActiveTemplate(next[0])
+        const created = next.find((tpl) => tpl.id === id) ?? null
+        setActiveTemplate(created)
+        if (created?.filePath) {
+          await window.api.openDoc({ filePath: created.filePath })
+        }
       },
     })
   }
 
   const handleEditTemplate = async (template: TemplateRow) => {
-    setTemplateEditor({
-      mode: 'edit',
-      id: template.id,
-      name: template.name,
-      content: template.content,
-    })
-  }
-
-  const handleOpenTemplateEditor = (mode: 'create' | 'edit', template?: TemplateRow) => {
-    setTemplateEditor({
-      mode,
-      id: template?.id,
-      name: template?.name ?? '新模板',
-      content: template?.content ?? '',
-    })
-  }
-
-  const handleTemplateEditorSave = async () => {
-    if (!templateEditor) return
-    if (!templateEditor.name.trim()) return
-    const content = templateEditor.content || ''
-    if (templateEditor.mode === 'create') {
-      await window.api.db.createTemplate({
-        name: templateEditor.name.trim(),
-        content,
-        folderId: templatePanel?.folderId ?? activeTemplateFolderId,
+    if (!template.filePath) {
+      openDialog({
+        title: '无法打开模板',
+        message: '当前模板未关联本地文件，请重新创建或联系管理员。',
+        confirmText: '知道了',
+        showInput: false,
+        onConfirm: async () => {},
       })
-    } else if (templateEditor.id) {
-      await window.api.db.updateTemplate({
-        id: templateEditor.id,
-        name: templateEditor.name.trim(),
-        content,
-        folderId: activeTemplateFolderId ?? null,
-      })
+      return
     }
-    const nextTemplates = await window.api.db.listTemplates()
-    syncTreeWithTemplates(nextTemplates)
-    setTemplateEditor(null)
+    await window.api.openDoc({ filePath: template.filePath })
   }
 
   const handleRenameTemplate = async () => {
@@ -250,16 +222,14 @@ export const useTemplates = ({ openDialog }: Options) => {
       showInput: true,
       onConfirm: async (value) => {
         if (!value) return
-        await window.api.db.updateTemplate({
+        await window.api.db.renameTemplate({
           id: activeTemplate.id,
           name: value,
-          content: activeTemplate.content,
-          folderId: activeTemplate.folderId ?? null,
         })
-        const next = { ...activeTemplate, name: value }
-        setActiveTemplate(next)
-        const nextTemplates = templates.map((tpl) => (tpl.id === next.id ? { ...tpl, name: next.name } : tpl))
+        const nextTemplates = await window.api.db.listTemplates()
         syncTreeWithTemplates(nextTemplates)
+        const next = nextTemplates.find((tpl) => tpl.id === activeTemplate.id) ?? null
+        setActiveTemplate(next)
       },
     })
   }
@@ -285,23 +255,15 @@ export const useTemplates = ({ openDialog }: Options) => {
 
   const handleCopyTemplate = async () => {
     if (!activeTemplate) return
-    const id = await window.api.db.createTemplate({
+    const id = await window.api.db.copyTemplate({
+      id: activeTemplate.id,
       name: `${activeTemplate.name}-副本`,
-      content: activeTemplate.content,
-      folderId: activeTemplate.folderId ?? null,
     })
     if (!id) return
-    const next = [
-      {
-        ...activeTemplate,
-        id,
-        name: `${activeTemplate.name}-副本`,
-        updatedAt: new Date().toISOString(),
-      },
-      ...templates,
-    ]
-    syncTreeWithTemplates(next)
-    setActiveTemplate(next[0])
+    const nextTemplates = await window.api.db.listTemplates()
+    syncTreeWithTemplates(nextTemplates)
+    const next = nextTemplates.find((tpl) => tpl.id === id) ?? null
+    setActiveTemplate(next)
   }
 
   const handleMoveTemplate = async (templateId: number, folderId: number | null) => {
@@ -378,10 +340,10 @@ export const useTemplates = ({ openDialog }: Options) => {
   }
 
   const handleMenuCreateFromTemplate = async (folderId: number | null, template: TemplateRow): Promise<DocDetail | null> => {
-    const detail = await window.api.db.createDoc({
+    const detail = await window.api.db.createDocFromTemplate({
+      templateId: template.id,
       folderId,
       title: `${template.name}-${new Date().toLocaleDateString()}`,
-      content: template.content,
     })
     return detail ?? null
   }
@@ -435,7 +397,6 @@ export const useTemplates = ({ openDialog }: Options) => {
     activeTemplate,
     collapsedTemplateFolders,
     templatePanel,
-    templateEditor,
     templateSearch,
     templatePickId,
     templateMenu,
@@ -443,7 +404,6 @@ export const useTemplates = ({ openDialog }: Options) => {
     filteredTemplates,
     rootTemplates,
     setTemplatePanel,
-    setTemplateEditor,
     setTemplateSearch,
     setTemplatePickId,
     setTemplateMenu,
@@ -459,8 +419,6 @@ export const useTemplates = ({ openDialog }: Options) => {
     handleDeleteTemplateFolder,
     handleCreateTemplate,
     handleEditTemplate,
-    handleOpenTemplateEditor,
-    handleTemplateEditorSave,
     handleRenameTemplate,
     handleDeleteTemplate,
     handleCopyTemplate,
@@ -473,6 +431,5 @@ export const useTemplates = ({ openDialog }: Options) => {
     handleTemplateMenuDelete,
   }
 }
-
 
 
