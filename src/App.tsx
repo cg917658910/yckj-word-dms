@@ -14,7 +14,7 @@ import TemplatePanels from './modules/template/TemplatePanels'
 import TemplateSidebar from './modules/template/TemplateSidebar'
 import type { DialogState, FolderNode, MenuState } from './types'
 import { toDocSummary } from './utils/tree'
-import { createEmptyEditorContent, extractEditorText } from './utils/editor'
+import { createEmptyEditorContent, extractEditorText, renderEditorHtml } from './utils/editor'
 
 function formatDate(value: string) {
   if (!value) return ''
@@ -305,13 +305,13 @@ function App() {
 
   const handlePrint = async () => {
     if (!activeDoc) return
-    const content = editorHtml
+    const content = editorHtml.trim() ? editorHtml : renderEditorHtml(editorData)
     await window.api.print({ title: activeDoc.title, content })
   }
 
   const handleExport = async (format: 'pdf' | 'word' | 'html') => {
     if (!activeDoc) return
-    const content = editorHtml
+    const content = editorHtml.trim() ? editorHtml : renderEditorHtml(editorData)
     const res = await window.api.exportDoc({
       title: activeDoc.title,
       content,

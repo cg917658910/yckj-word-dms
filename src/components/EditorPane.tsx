@@ -1,10 +1,4 @@
-import Editor, {
-  EDITOR_COMPONENT,
-  EditorComponent,
-  ElementType,
-  RowFlex,
-  TitleLevel,
-} from '@hufe921/canvas-editor'
+import Editor, { ElementType, RowFlex, TitleLevel } from '@hufe921/canvas-editor'
 import docxPlugin from '@hufe921/canvas-editor-plugin-docx'
 import { useEffect, useMemo, useRef } from 'react'
 import type { DocDetail, TemplateRow } from '../types'
@@ -105,10 +99,34 @@ const EditorPane = ({
 
   const run = (fn: (command: Editor['command']) => void) => {
     if (!editorRef.current) return
+    editorRef.current.command.executeFocus()
     fn(editorRef.current.command)
   }
   const exportDocx = (name: string) =>
     run((cmd) => (cmd as any).executeExportDocx({ fileName: name || '文档' }))
+
+  const handleSelectTable = async () => {
+    if (!editorRef.current) return
+    const cmd = editorRef.current.command
+    cmd.executeFocus()
+    const range = (cmd as any).getRange?.()
+    if (range?.tableId) {
+      cmd.executeSetPositionContext(range)
+      cmd.executeTableSelectAll()
+      return
+    }
+    const result =
+      (await (cmd as any).getValueAsync?.()) ||
+      (typeof (cmd as any).getValue === 'function' ? (cmd as any).getValue() : null)
+    const list = result?.data?.main ?? []
+    const tableIndex = list.findIndex((item: any) => item?.type === ElementType.TABLE)
+    if (tableIndex < 0) return
+    const table = list[tableIndex]
+    if (!table?.id || !table?.trList?.length || !table.trList[0]?.tdList?.length) return
+    cmd.executeSetRange(tableIndex, tableIndex, table.id, 0, 0, 0, 0)
+    cmd.executeSetPositionContext({ tableId: table.id, startTrIndex: 0, startTdIndex: 0 } as any)
+    cmd.executeTableSelectAll()
+  }
 
   useEffect(() => {
     if (!hasContent) {
@@ -208,16 +226,9 @@ const EditorPane = ({
 
   // value changes are driven by editor events, avoid re-initializing on every update
 
-  const toolbarAttr = useMemo(
-    () => ({
-      [EDITOR_COMPONENT]: (EditorComponent as any).TOOLBAR,
-    }),
-    []
-  )
-
   return (
     <section className='editor'>
-      <div className='editor-toolbar' {...toolbarAttr}>
+      <div className='editor-toolbar'>
         <div className='editor-format'>
           <button className='tool' onClick={() => run((cmd) => cmd.executeUndo())} title='撤销'>
             ↶
@@ -314,6 +325,9 @@ const EditorPane = ({
           <span className='tool-divider' />
           <button className='tool' onClick={() => run((cmd) => cmd.executeInsertTable(3, 3))} title='插入表格'>
             表格
+          </button>
+          <button className='tool' onClick={() => void handleSelectTable()} title='选中表格'>
+            选表
           </button>
           <button className='tool' onClick={() => run((cmd) => cmd.executePrint())} title='打印'>
             打印
