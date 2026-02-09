@@ -20,8 +20,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@ckeditor/ckeditor5-react": "^11.0.1",
-    "ckeditor5": "^47.4.0",
     "html-to-docx": "^1.8.0",
     "iconv-lite": "^0.6.3",
     "mammoth": "^1.11.0",

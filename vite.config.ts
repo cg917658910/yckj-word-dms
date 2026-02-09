@@ -19,12 +19,12 @@ export default defineConfig(({ command }) => {
   return {
     resolve: {
       alias: {
-        '@': path.join(__dirname, 'src')
+        '@': path.join(__dirname, 'src'),
+        '@hufe921/canvas-editor': path.join(__dirname, 'src/vendor/canvas-editor'),
       },
-      dedupe: ['ckeditor5'],
     },
     optimizeDeps: {
-      include: ['ckeditor5', 'es-toolkit', 'es-toolkit/compat/isEqual', 'fuzzysort', 'extend', 'debug'],
+      include: ['es-toolkit', 'es-toolkit/compat/isEqual', 'fuzzysort', 'extend', 'debug'],
     },
     plugins: [
       react(),

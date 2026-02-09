@@ -1,5 +1,5 @@
-﻿import { CKEditor } from '@ckeditor/ckeditor5-react'
-import ClassicEditor, { EDITOR_CONFIG } from '../ckeditor'
+﻿import { useEffect, useRef } from 'react'
+import Editor, { type CanvasEditorBlock } from '@hufe921/canvas-editor'
 import type { DocDetail, TemplateRow } from '../types'
 
 type Props = {
@@ -46,6 +46,40 @@ const EditorPane = ({
   editorStyle,
 }: Props) => {
   const hasContent = viewMode === 'doc' ? !!activeDoc : !!activeTemplate
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const editorRef = useRef<Editor | null>(null)
+  const lastHtmlRef = useRef<string>('')
+
+  const htmlToBlocks = (html: string): CanvasEditorBlock[] => {
+    if (!html) return [{ value: '' }]
+    return [{ value: html }]
+  }
+
+  useEffect(() => {
+    if (!hasContent) return undefined
+    const container = containerRef.current
+    if (!container || editorRef.current) return undefined
+    const initialBlocks = htmlToBlocks(value)
+    editorRef.current = new Editor(container, {
+      main: initialBlocks,
+      placeholder: '直接输入内容，或使用模板快速创建文档',
+      onChange: (_main, html) => {
+        lastHtmlRef.current = html
+        onChange(html)
+      },
+    })
+    return () => {
+      editorRef.current?.destroy()
+      editorRef.current = null
+    }
+  }, [hasContent])
+
+  useEffect(() => {
+    const instance = editorRef.current
+    if (!instance) return
+    if (value === lastHtmlRef.current) return
+    instance.setData(htmlToBlocks(value))
+  }, [value])
 
   return (
     <section className='editor'>
@@ -112,15 +146,7 @@ const EditorPane = ({
         ) : (
           <div className='editor-paper'>
             {editorStyle ? <style dangerouslySetInnerHTML={{ __html: editorStyle }} /> : null}
-            <CKEditor
-              editor={ClassicEditor as unknown as any}
-              data={value}
-              onChange={(_, editor) => onChange(editor.getData())}
-              config={{
-                ...(EDITOR_CONFIG as any),
-                placeholder: '直接输入内容，或使用模板快速创建文档',
-              } as any}
-            />
+            <div className='canvas-editor' ref={containerRef} />
           </div>
         )}
       </div>
@@ -129,4 +155,3 @@ const EditorPane = ({
 }
 
 export default EditorPane
-
