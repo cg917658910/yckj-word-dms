@@ -261,6 +261,12 @@ async function ensureDb() {
       run(database, 'alter table documents add column file_path text')
     }
 
+    const docColumns = all<{ name: string }>(database, 'pragma table_info(documents)')
+    const hasFilePath = docColumns.some((col) => col.name === 'file_path')
+    if (!hasFilePath) {
+      run(database, 'alter table documents add column file_path text')
+    }
+
     db = database
     await seedIfEmpty(database)
     await migrateDocumentsToFiles(database)
@@ -707,6 +713,37 @@ async function copyDocument(input: CopyDocInput) {
   }
   const doc = await getDocument(row.id)
   const dbPath = getDbPath()
+  saveDb(database, dbPath)
+  return doc
+}
+
+async function copyDocument(input: CopyDocInput) {
+  const database = await ensureDb()
+  const source = await getDocument(input.id)
+  if (!source?.filePath || !fs.existsSync(source.filePath)) return null
+  run(database, 'insert into documents (folder_id, title, content) values (?, ?, ?)', [
+    source.folderId,
+    input.title,
+    '',
+  ])
+  const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
+  if (!row?.id) return null
+  const docsDir = ensureDocsDir()
+  const baseName = sanitizeFileName(input.title)
+  const candidate = path.join(docsDir, `${row.id}-${baseName}.docx`)
+  const filePath = await ensureUniquePath(candidate)
+  try {
+    fs.copyFileSync(source.filePath, filePath)
+    run(database, 'update documents set file_path = ?, updated_at = datetime(\'now\') where id = ?', [
+      filePath,
+      row.id,
+    ])
+  } catch (error) {
+    run(database, 'delete from documents where id = ?', [row.id])
+    throw error
+  }
+  const doc = await getDocument(row.id)
+  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
   saveDb(database, dbPath)
   return doc
 }
