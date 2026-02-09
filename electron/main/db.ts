@@ -122,7 +122,8 @@ const require = createRequire(import.meta.url)
 const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm')
 
 const getDataDir = () => {
-  const dir = path.join(app.getPath('userData'), 'data')
+  //const dir = path.join(app.getPath('userData'), 'data')
+  const dir =  path.join(process.env.APP_ROOT, 'data')
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true })
   }
@@ -178,10 +179,10 @@ async function ensureDb() {
   if (sqlReady) return sqlReady
 
   const dbPath = getDbPath()
-  const legacyPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  /* const legacyPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
   if (!fs.existsSync(dbPath) && fs.existsSync(legacyPath)) {
     fs.copyFileSync(legacyPath, dbPath)
-  }
+  } */
 
   sqlReady = (async () => {
     const SQL = await initSqlJs({
@@ -253,12 +254,6 @@ async function ensureDb() {
     }
     if (!hasTemplateFilePath) {
       run(database, 'alter table templates add column file_path text')
-    }
-
-    const docColumns = all<{ name: string }>(database, 'pragma table_info(documents)')
-    const hasFilePath = docColumns.some((col) => col.name === 'file_path')
-    if (!hasFilePath) {
-      run(database, 'alter table documents add column file_path text')
     }
 
     const docColumns = all<{ name: string }>(database, 'pragma table_info(documents)')
@@ -713,37 +708,6 @@ async function copyDocument(input: CopyDocInput) {
   }
   const doc = await getDocument(row.id)
   const dbPath = getDbPath()
-  saveDb(database, dbPath)
-  return doc
-}
-
-async function copyDocument(input: CopyDocInput) {
-  const database = await ensureDb()
-  const source = await getDocument(input.id)
-  if (!source?.filePath || !fs.existsSync(source.filePath)) return null
-  run(database, 'insert into documents (folder_id, title, content) values (?, ?, ?)', [
-    source.folderId,
-    input.title,
-    '',
-  ])
-  const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
-  if (!row?.id) return null
-  const docsDir = ensureDocsDir()
-  const baseName = sanitizeFileName(input.title)
-  const candidate = path.join(docsDir, `${row.id}-${baseName}.docx`)
-  const filePath = await ensureUniquePath(candidate)
-  try {
-    fs.copyFileSync(source.filePath, filePath)
-    run(database, 'update documents set file_path = ?, updated_at = datetime(\'now\') where id = ?', [
-      filePath,
-      row.id,
-    ])
-  } catch (error) {
-    run(database, 'delete from documents where id = ?', [row.id])
-    throw error
-  }
-  const doc = await getDocument(row.id)
-  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
   saveDb(database, dbPath)
   return doc
 }

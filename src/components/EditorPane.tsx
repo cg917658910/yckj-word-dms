@@ -1,6 +1,4 @@
-﻿import { CKEditor } from '@ckeditor/ckeditor5-react'
-import ClassicEditor, { EDITOR_CONFIG } from '../ckeditor'
-import type { DocDetail, TemplateRow } from '../types'
+﻿import type { DocDetail, TemplateRow } from '../types'
 
 type Props = {
   viewMode: 'doc' | 'template'
@@ -55,7 +53,7 @@ const EditorPane = ({
 
   return (
     <section className='editor'>
-      <div className='editor-toolbar'>
+      {/* <div className='editor-toolbar'>
         <div className='editor-title-bar'>
           <div className='editor-title-left'>
             <input
@@ -105,14 +103,10 @@ const EditorPane = ({
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
 
       <div className='editor-canvas'>
-        {!hasContent ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
-            <p style={{ color: '#94a3b8', fontSize: 15 }}>选择或创建文档开始编辑</p>
-          </div>
-        ) : viewMode === 'doc' ? (
+        {viewMode === 'doc' ? (
           <div className='editor-paper doc-file-panel'>
             <div className='doc-file-card'>
               <div className='doc-file-title'>{activeDoc?.title ?? '未命名文档'}</div>
@@ -141,17 +135,32 @@ const EditorPane = ({
             </div>
           </div>
         ) : (
-          <div className='editor-paper'>
-            {editorStyle ? <style dangerouslySetInnerHTML={{ __html: editorStyle }} /> : null}
-            <CKEditor
-              editor={ClassicEditor as unknown as any}
-              data={value}
-              onChange={(_, editor) => onChange(editor.getData())}
-              config={{
-                ...(EDITOR_CONFIG as any),
-                placeholder: '直接输入内容，或使用模板快速创建文档',
-              } as any}
-            />
+          <div className='editor-paper doc-file-panel'>
+            <div className='doc-file-card'>
+              <div className='doc-file-title'>{activeTemplate?.name ?? '未命名模板'}</div>
+              <div className='doc-file-meta'>
+                <div>
+                  <span>上次使用：</span>
+                  <span>{activeTemplate ? formatDate(activeTemplate?.updatedAt) : '-'}</span>
+                </div>
+                <div>
+                  <span>使用次数：</span>
+                  <span>{activeTemplate ? `${(activeTemplate?.usageCount)}` : '-'}</span>
+                </div>
+                <div className='doc-file-path'>
+                  <span>模板路径：</span>
+                  <span>{activeTemplate?.filePath ?? '未关联模板'}</span>
+                </div>
+              </div>
+              <div className='doc-file-actions'>
+                <button className='primary' onClick={onOpenTemplate} disabled={!activeTemplate}>
+                  使用本地 Word/WPS 编辑
+                </button>
+                <button onClick={onRevealTemplate} disabled={!activeTemplate}>
+                  在文件夹中显示
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
