@@ -240,7 +240,11 @@ export const useDocuments = ({ openDialog }: Options) => {
         const detail = await window.api.db.renameDoc({ id: activeDoc.id, title: value })
         if (detail) setActiveDoc(detail)
         if (detail) {
-          const nextDocs = docs.map((doc) => (doc.id === detail.id ? { ...doc, title: detail.title, updatedAt: detail.updatedAt } : doc))
+          const nextDocs = docs.map((doc) =>
+            doc.id === detail.id
+              ? { ...doc, title: detail.title, updatedAt: detail.updatedAt, filePath: detail.filePath ?? null, size: detail.size }
+              : doc
+          )
           setDocs(nextDocs)
         }
       },
@@ -273,10 +277,9 @@ export const useDocuments = ({ openDialog }: Options) => {
 
   const handleCopyDoc = async () => {
     if (!activeDoc) return
-    const detail = await window.api.db.createDoc({
-      folderId: activeDoc.folderId,
+    const detail = await window.api.db.copyDoc({
+      id: activeDoc.id,
       title: `${activeDoc.title}-副本`,
-      content: activeDoc.content,
     })
     if (!detail) return
     const nextDocs = [toDocSummary(detail), ...docs]
@@ -376,7 +379,5 @@ export const useDocuments = ({ openDialog }: Options) => {
     handleDocMenuDelete,
   }
 }
-
-
 
 

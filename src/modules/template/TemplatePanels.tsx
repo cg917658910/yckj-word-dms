@@ -23,8 +23,6 @@ type Props = {
   onEditTemplate: (tpl: TemplateRow) => void
   onDeleteTemplate: () => void
   onOpenTemplateEditor: (mode: 'create' | 'edit', template?: TemplateRow) => void
-  onSaveAsTemplate: () => void
-  canSaveAsTemplate: boolean
   editor: TemplateEditorState | null
   onCloseEditor: () => void
   onEditorNameChange: (value: string) => void
@@ -54,8 +52,6 @@ const TemplatePanels = ({
   onEditTemplate,
   onDeleteTemplate,
   onOpenTemplateEditor,
-  onSaveAsTemplate,
-  canSaveAsTemplate,
   editor,
   onCloseEditor,
   onEditorNameChange,
