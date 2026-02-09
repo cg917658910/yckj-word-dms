@@ -17,6 +17,8 @@ type Props = {
   onDeleteTemplate: () => void
   onOpenDoc: () => void
   onRevealDoc: () => void
+  onOpenTemplate: () => void
+  onRevealTemplate: () => void
   activeDoc: DocDetail | null
   activeTemplate: TemplateRow | null
   formatDate: (value: string) => string
@@ -40,6 +42,8 @@ const EditorPane = ({
   onDeleteTemplate,
   onOpenDoc,
   onRevealDoc,
+  onOpenTemplate,
+  onRevealTemplate,
   activeDoc,
   activeTemplate,
   formatDate,
@@ -82,6 +86,12 @@ const EditorPane = ({
                     </>
                   ) : (
                     <>
+                      <button className='menu-item' onClick={() => { onCloseEditorMenu(); onOpenTemplate() }} disabled={!activeTemplate}>
+                        使用本地 Word/WPS 打开
+                      </button>
+                      <button className='menu-item' onClick={() => { onCloseEditorMenu(); onRevealTemplate() }} disabled={!activeTemplate}>
+                        在文件夹中显示
+                      </button>
                       <button className='menu-item' onClick={() => { onCloseEditorMenu(); onExport('pdf') }} disabled={!activeTemplate}>
                         导出 PDF
                       </button>
