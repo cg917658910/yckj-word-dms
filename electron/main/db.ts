@@ -287,8 +287,8 @@ async function ensureDb() {
 
     db = database
     await seedIfEmpty(database)
-    await migrateDocumentsToFiles(database)
-    await migrateTemplatesToFiles(database)
+    //await migrateDocumentsToFiles(database)
+    //await migrateTemplatesToFiles(database)
     saveDb(database, dbPath)
     return database
   })()
