@@ -38,6 +38,7 @@ export type TemplateRow = {
   content: string
   filePath?: string | null
   updatedAt: string
+  size?: number
   lastUsedAt?: string | null
   usageCount?: number | null
   folderId?: number | null
@@ -107,6 +108,28 @@ export type UpdateTemplateInput = {
   id: number
   name: string
   content: string
+  folderId?: number | null
+}
+
+export type RenameTemplateInput = {
+  id: number
+  name: string
+}
+
+export type CopyTemplateInput = {
+  id: number
+  name: string
+}
+
+export type CreateDocFromTemplateInput = {
+  templateId: number
+  folderId: number | null
+  title: string
+}
+
+export type CreateTemplateFromFileInput = {
+  name: string
+  sourcePath: string
   folderId?: number | null
 }
 
@@ -394,12 +417,17 @@ async function migrateTemplatesToFiles(database: Database) {
   const templatesDir = ensureTemplatesDir()
   for (const row of rows) {
     const hasFile = row.filePath && fs.existsSync(row.filePath)
-    if (hasFile) continue
+    if (hasFile) {
+      if (row.content) {
+        run(database, 'update templates set content = ? where id = ?', ['', row.id])
+      }
+      continue
+    }
     const baseName = sanitizeFileName(row.name)
     const candidate = path.join(templatesDir, `${row.id}-${baseName}.docx`)
     const targetPath = await ensureUniquePath(candidate)
     await writeDocxFile(targetPath, row.content || '')
-    run(database, 'update templates set file_path = ? where id = ?', [targetPath, row.id])
+    run(database, 'update templates set file_path = ?, content = ? where id = ?', [targetPath, '', row.id])
   }
 }
 
@@ -730,17 +758,32 @@ async function deleteDocument(id: number) {
 
 async function listTemplates(): Promise<TemplateRow[]> {
   const database = await ensureDb()
-  return all<TemplateRow>(
+  const rows = all<TemplateRow>(
     database,
     'select id, name, content, file_path as filePath, updated_at as updatedAt, usage_count as usageCount, last_used_at as lastUsedAt, folder_id as folderId from templates order by datetime(last_used_at) desc, usage_count desc, updated_at desc'
   )
+  return rows.map((row) => {
+    let size = 0
+    if (row.filePath && fs.existsSync(row.filePath)) {
+      try {
+        size = fs.statSync(row.filePath).size
+      } catch {
+        size = 0
+      }
+    }
+    return {
+      ...row,
+      size,
+      content: row.content ?? '',
+    }
+  })
 }
 
 export async function createTemplate(input: CreateTemplateInput) {
   const database = await ensureDb()
   run(database, 'insert into templates (name, content, updated_at, folder_id) values (?, ?, datetime(\'now\'), ?)', [
     input.name,
-    input.content,
+    '',
     input.folderId ?? null,
   ])
   const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
@@ -751,7 +794,7 @@ export async function createTemplate(input: CreateTemplateInput) {
     const filePath = await ensureUniquePath(candidate)
     try {
       await writeDocxFile(filePath, input.content)
-      run(database, 'update templates set file_path = ? where id = ?', [filePath, row.id])
+      run(database, 'update templates set file_path = ?, content = ? where id = ?', [filePath, '', row.id])
     } catch (error) {
       run(database, 'delete from templates where id = ?', [row.id])
       throw error
@@ -792,7 +835,7 @@ async function updateTemplate(input: UpdateTemplateInput) {
   }
   run(database, 'update templates set name = ?, content = ?, folder_id = ?, file_path = ?, updated_at = datetime(\'now\') where id = ?', [
     input.name,
-    input.content,
+    '',
     input.folderId ?? null,
     filePath,
     input.id,
@@ -800,6 +843,99 @@ async function updateTemplate(input: UpdateTemplateInput) {
   const dbPath = getDbPath()
   saveDb(database, dbPath)
   return true
+}
+
+async function renameTemplate(input: RenameTemplateInput) {
+  const database = await ensureDb()
+  const current = get<{ filePath: string | null }>(database, 'select file_path as filePath from templates where id = ?', [
+    input.id,
+  ])
+  const templatesDir = ensureTemplatesDir()
+  const baseName = sanitizeFileName(input.name)
+  const desiredPath = await ensureUniquePath(path.join(templatesDir, `${input.id}-${baseName}.docx`))
+  let filePath = current?.filePath ?? null
+  if (filePath && filePath !== desiredPath && fs.existsSync(filePath)) {
+    try {
+      fs.renameSync(filePath, desiredPath)
+      filePath = desiredPath
+    } catch {
+      filePath = filePath
+    }
+  }
+  run(database, 'update templates set name = ?, file_path = ?, updated_at = datetime(\'now\') where id = ?', [
+    input.name,
+    filePath,
+    input.id,
+  ])
+  const dbPath = getDbPath()
+  saveDb(database, dbPath)
+  return true
+}
+
+async function copyTemplate(input: CopyTemplateInput) {
+  const database = await ensureDb()
+  const source = get<{ filePath: string | null; folderId: number | null }>(
+    database,
+    'select file_path as filePath, folder_id as folderId from templates where id = ?',
+    [input.id]
+  )
+  run(database, 'insert into templates (name, content, updated_at, folder_id) values (?, ?, datetime(\'now\'), ?)', [
+    input.name,
+    '',
+    source?.folderId ?? null,
+  ])
+  const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
+  if (!row?.id) return null
+  const templatesDir = ensureTemplatesDir()
+  const baseName = sanitizeFileName(input.name)
+  const candidate = path.join(templatesDir, `${row.id}-${baseName}.docx`)
+  const filePath = await ensureUniquePath(candidate)
+  try {
+    if (source?.filePath && fs.existsSync(source.filePath)) {
+      fs.copyFileSync(source.filePath, filePath)
+    } else {
+      await writeDocxFile(filePath, '')
+    }
+    run(database, 'update templates set file_path = ? where id = ?', [filePath, row.id])
+  } catch (error) {
+    run(database, 'delete from templates where id = ?', [row.id])
+    throw error
+  }
+  const dbPath = getDbPath()
+  saveDb(database, dbPath)
+  return Number(row.id)
+}
+
+export async function createTemplateFromFile(input: CreateTemplateFromFileInput) {
+  const database = await ensureDb()
+  run(database, 'insert into templates (name, content, updated_at, folder_id) values (?, ?, datetime(\'now\'), ?)', [
+    input.name,
+    '',
+    input.folderId ?? null,
+  ])
+  const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
+  if (!row?.id) return null
+  const templatesDir = ensureTemplatesDir()
+  const baseName = sanitizeFileName(input.name)
+  const candidate = path.join(templatesDir, `${row.id}-${baseName}.docx`)
+  const filePath = await ensureUniquePath(candidate)
+  const ext = path.extname(input.sourcePath).toLowerCase()
+  try {
+    if (ext === '.docx') {
+      fs.copyFileSync(input.sourcePath, filePath)
+    } else {
+      const { toHtmlFromFile } = await import('./import')
+      const html = await toHtmlFromFile(input.sourcePath)
+      await writeDocxFile(filePath, html || '')
+    }
+    run(database, 'update templates set file_path = ? where id = ?', [filePath, row.id])
+  } catch (error) {
+    run(database, 'delete from templates where id = ?', [row.id])
+    throw error
+  }
+  const dbPath = getDbPath()
+  saveDb(database, dbPath)
+  return Number(row.id)
 }
 
 async function moveTemplate(input: MoveTemplateInput) {
@@ -834,7 +970,7 @@ export async function importTemplates(items: Array<{ name: string; content: stri
   for (const item of items) {
     run(database, 'insert into templates (name, content, updated_at) values (?, ?, datetime(\'now\'))', [
       item.name,
-      item.content,
+      '',
     ])
     const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
     if (row?.id) {
@@ -843,7 +979,7 @@ export async function importTemplates(items: Array<{ name: string; content: stri
       const candidate = path.join(templatesDir, `${row.id}-${baseName}.docx`)
       const filePath = await ensureUniquePath(candidate)
       await writeDocxFile(filePath, item.content)
-      run(database, 'update templates set file_path = ? where id = ?', [filePath, row.id])
+      run(database, 'update templates set file_path = ?, content = ? where id = ?', [filePath, '', row.id])
     }
   }
   const dbPath = getDbPath()
@@ -851,20 +987,67 @@ export async function importTemplates(items: Array<{ name: string; content: stri
   return true
 }
 
+async function createDocFromTemplate(input: CreateDocFromTemplateInput) {
+  const database = await ensureDb()
+  const template = get<{ name: string; filePath: string | null }>(
+    database,
+    'select name, file_path as filePath from templates where id = ?',
+    [input.templateId]
+  )
+  if (!template) return null
+  run(database, 'insert into documents (folder_id, title, content) values (?, ?, ?)', [
+    input.folderId,
+    input.title,
+    '',
+  ])
+  const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
+  if (!row?.id) return null
+  const docsDir = ensureDocsDir()
+  const baseName = sanitizeFileName(input.title || template.name)
+  const candidate = path.join(docsDir, `${row.id}-${baseName}.docx`)
+  const filePath = await ensureUniquePath(candidate)
+  try {
+    if (template.filePath && fs.existsSync(template.filePath)) {
+      fs.copyFileSync(template.filePath, filePath)
+    } else {
+      await writeDocxFile(filePath, '')
+    }
+    run(database, 'update documents set file_path = ?, updated_at = datetime(\'now\') where id = ?', [
+      filePath,
+      row.id,
+    ])
+  } catch (error) {
+    run(database, 'delete from documents where id = ?', [row.id])
+    throw error
+  }
+  const doc = await getDocument(row.id)
+  const dbPath = getDbPath()
+  saveDb(database, dbPath)
+  return doc
+}
+
 async function applyTemplate(payload: { templateId: number; docId: number }) {
   const database = await ensureDb()
-  const template = get<{ content: string }>(database, 'select content from templates where id = ?', [payload.templateId])
+  const template = get<{ filePath: string | null }>(
+    database,
+    'select file_path as filePath from templates where id = ?',
+    [payload.templateId]
+  )
   if (!template) return null
   const doc = await getDocument(payload.docId)
-  if (doc?.filePath) {
-    await writeDocxFile(doc.filePath, template.content)
-  } else if (doc) {
+  if (!doc) return null
+  let targetPath = doc.filePath
+  if (!targetPath) {
     const docsDir = ensureDocsDir()
     const baseName = sanitizeFileName(doc.title)
     const candidate = path.join(docsDir, `${doc.id}-${baseName}.docx`)
-    const filePath = await ensureUniquePath(candidate)
-    await writeDocxFile(filePath, template.content)
-    run(database, 'update documents set file_path = ? where id = ?', [filePath, doc.id])
+    targetPath = await ensureUniquePath(candidate)
+    run(database, 'update documents set file_path = ? where id = ?', [targetPath, doc.id])
+  }
+  if (template.filePath && fs.existsSync(template.filePath)) {
+    fs.copyFileSync(template.filePath, targetPath)
+  } else {
+    await writeDocxFile(targetPath, '')
   }
   run(database, 'update documents set content = ?, updated_at = datetime(\'now\') where id = ?', [
     '',
@@ -916,9 +1099,17 @@ export function registerDbIpc() {
   ipcMain.handle('db:list-templates', async () => listTemplates())
   ipcMain.handle('db:create-template', async (_event, input: CreateTemplateInput) => createTemplate(input))
   ipcMain.handle('db:update-template', async (_event, input: UpdateTemplateInput) => updateTemplate(input))
+  ipcMain.handle('db:rename-template', async (_event, input: RenameTemplateInput) => renameTemplate(input))
+  ipcMain.handle('db:copy-template', async (_event, input: CopyTemplateInput) => copyTemplate(input))
+  ipcMain.handle('db:create-template-from-file', async (_event, input: CreateTemplateFromFileInput) =>
+    createTemplateFromFile(input)
+  )
   ipcMain.handle('db:move-template', async (_event, input: MoveTemplateInput) => moveTemplate(input))
   ipcMain.handle('db:delete-template', async (_event, id: number) => deleteTemplate(id))
   ipcMain.handle('db:use-template', async (_event, id: number) => useTemplate(id))
+  ipcMain.handle('db:create-doc-from-template', async (_event, input: CreateDocFromTemplateInput) =>
+    createDocFromTemplate(input)
+  )
   ipcMain.handle('db:apply-template', async (_event, payload: { templateId: number; docId: number }) =>
     applyTemplate(payload)
   )

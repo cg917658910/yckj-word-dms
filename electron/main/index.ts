@@ -4,6 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerDbIpc } from './db'
 import { registerExportIpc } from './export'
+import { toHtmlFromFile } from './import'
 import { registerUploadIpc } from './upload'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -122,4 +123,12 @@ ipcMain.handle('doc:reveal', async (_event, payload: { filePath: string }) => {
   return true
 })
 
+ipcMain.handle('file:preview', async (_event, payload: { filePath: string }) => {
+  if (!payload?.filePath) return ''
+  try {
+    return await toHtmlFromFile(payload.filePath)
+  } catch {
+    return ''
+  }
+})
 

@@ -1,5 +1,5 @@
 ﻿import TreeView from '../../components/TreeView';
-import type { DocSummary, FolderNode, TemplateEditorState, TemplateRow } from '../../types';
+import type { DocSummary, FolderNode, TemplateRow } from '../../types';
 
 type Props = {
   panel: { folderId: number | null; mode: 'create' | 'manage' } | null
@@ -22,12 +22,8 @@ type Props = {
   onCreateDocFromTemplateId: (id: number) => void
   onEditTemplate: (tpl: TemplateRow) => void
   onDeleteTemplate: () => void
-  onOpenTemplateEditor: (mode: 'create' | 'edit', template?: TemplateRow) => void
-  editor: TemplateEditorState | null
-  onCloseEditor: () => void
-  onEditorNameChange: (value: string) => void
-  onEditorContentChange: (value: string) => void
-  onEditorSave: () => void
+  previewHtml: string
+  previewLoading: boolean
 }
 
 const TemplatePanels = ({
@@ -51,12 +47,8 @@ const TemplatePanels = ({
   onCreateDocFromTemplateId,
   onEditTemplate,
   onDeleteTemplate,
-  onOpenTemplateEditor,
-  editor,
-  onCloseEditor,
-  onEditorNameChange,
-  onEditorContentChange,
-  onEditorSave,
+  previewHtml,
+  previewLoading,
 }: Props) => (
   <>
     {panel ? (
@@ -106,12 +98,17 @@ const TemplatePanels = ({
                   </div>
                   <div className='panel-preview'>
                     {templatePickId ? (
-                      <div
-                        className='panel-preview-body'
-                        dangerouslySetInnerHTML={{
-                          __html: templates.find((tpl) => tpl.id === templatePickId)?.content ?? '',
-                        }}
-                      />
+                      previewLoading ? (
+                        <div className='panel-preview-placeholder'>
+                          <div className='panel-preview-placeholder-icon'>⏳</div>
+                          <div className='panel-preview-placeholder-text'>正在加载预览...</div>
+                        </div>
+                      ) : (
+                        <div
+                          className='panel-preview-body'
+                          dangerouslySetInnerHTML={{ __html: previewHtml }}
+                        />
+                      )
                     ) : (
                       <div className='panel-preview-placeholder'>
                         <div className='panel-preview-placeholder-icon'>📄</div>

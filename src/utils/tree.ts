@@ -87,8 +87,8 @@ export const toTemplateSummary = (template: TemplateRow): DocSummary => {
     snippet: text.slice(0, 120),
     updatedAt: template.updatedAt,
     createdAt: template.updatedAt,
-    size: (template.content || '').length,
-    filePath: null,
+    size: template.size ?? (template.content || '').length,
+    filePath: template.filePath ?? null,
   }
 }
 

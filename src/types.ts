@@ -42,6 +42,7 @@ export type TemplateRow = {
   content: string
   updatedAt: string
   filePath?: string | null
+  size?: number
   lastUsedAt?: string | null
   usageCount?: number | null
   folderId?: number | null
