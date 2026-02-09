@@ -13,7 +13,7 @@ import TemplateMenu from './modules/template/TemplateMenu'
 import TemplatePanels from './modules/template/TemplatePanels'
 import TemplateSidebar from './modules/template/TemplateSidebar'
 import type { DialogState, FolderNode, MenuState } from './types'
-import { stripHtml, toDocSummary } from './utils/tree'
+import { toDocSummary } from './utils/tree'
 
 function formatDate(value: string) {
   if (!value) return ''
@@ -174,9 +174,8 @@ function App() {
   useEffect(() => {
     if (viewMode !== 'doc') return
     if (!activeDoc) return
-    const parsed = extractImportedStyle(activeDoc.content || '')
-    setEditorStyle(parsed.css)
-    setEditorHtml(parsed.html)
+    setEditorStyle('')
+    setEditorHtml('')
     setTitleDraft(activeDoc.title)
   }, [activeDoc, viewMode])
 
@@ -198,23 +197,6 @@ function App() {
   }, [viewMode, activeDoc, activeTemplate])
 
   const handleSave = async () => {
-    if (viewMode === 'doc') {
-      if (!activeDoc) return
-      const content = composeWithStyle(editorHtml, editorStyle)
-      const next = await window.api.db.saveDoc({
-        id: activeDoc.id,
-        title: titleDraft.trim() || activeDoc.title,
-        content,
-      })
-      setActiveDoc(next)
-      if (next) {
-        const nextDocs = docs.map((doc) =>
-          doc.id === next.id ? { ...doc, title: next.title, updatedAt: next.updatedAt, snippet: stripHtml(next.content || '').slice(0, 120) } : doc
-        )
-        syncTreeWithDocs(nextDocs)
-      }
-      return
-    }
     if (viewMode === 'template') {
       if (!activeTemplate) return
       const next = {
@@ -235,12 +217,6 @@ function App() {
   }
 
   useEffect(() => {
-    if (viewMode === 'doc' && activeDoc) {
-      const timer = setTimeout(() => {
-        handleSave()
-      }, 600)
-      return () => clearTimeout(timer)
-    }
     if (viewMode === 'template' && activeTemplate) {
       const timer = setTimeout(() => {
         handleSave()
@@ -248,7 +224,7 @@ function App() {
       return () => clearTimeout(timer)
     }
     return undefined
-  }, [editorHtml, titleDraft, viewMode, activeDoc, activeTemplate])
+  }, [editorHtml, titleDraft, viewMode, activeTemplate])
 
   const handleTitleBlur = async () => {
     if (!titleDraft.trim()) {
@@ -262,8 +238,11 @@ function App() {
       const detail = await window.api.db.renameDoc({ id: activeDoc.id, title: titleDraft.trim() })
       if (detail) {
         setActiveDoc(detail)
-        setEditorHtml(detail.content || '')
-        const nextDocs = docs.map((doc) => (doc.id === detail.id ? { ...doc, title: detail.title, updatedAt: detail.updatedAt } : doc))
+        const nextDocs = docs.map((doc) =>
+          doc.id === detail.id
+            ? { ...doc, title: detail.title, updatedAt: detail.updatedAt, filePath: detail.filePath ?? null, size: detail.size }
+            : doc
+        )
         syncTreeWithDocs(nextDocs)
       }
       return
@@ -292,7 +271,6 @@ function App() {
     const nextDocs = [toDocSummary(detail), ...docs]
     syncTreeWithDocs(nextDocs)
     setActiveDoc(detail)
-    setEditorHtml(detail.content || '')
   }
 
   const handleOpenTemplatePanel = (folderId: number | null, mode: 'create' | 'manage') => {
@@ -300,27 +278,19 @@ function App() {
     setTemplatePanel({ folderId: targetFolderId ?? null, mode })
   }
 
-  const handleSaveAsTemplate = async () => {
-    if (!activeDoc) return
-    setTemplatePanel({ folderId: activeTemplateFolderId ?? null, mode: 'create' })
-    setTemplateEditor({
-      mode: 'create',
-      name: activeDoc.title,
-      content: composeWithStyle(editorHtml, editorStyle),
-    })
-  }
-
   const handlePrint = async () => {
-    if (!activeDoc) return
+    if (viewMode !== 'template') return
+    if (!activeTemplate) return
     const content = composeWithStyle(editorHtml, editorStyle)
-    await window.api.print({ title: activeDoc.title, content })
+    await window.api.print({ title: titleDraft.trim() || activeTemplate.name, content })
   }
 
   const handleExport = async (format: 'pdf' | 'word' | 'html') => {
-    if (!activeDoc) return
+    if (viewMode !== 'template') return
+    if (!activeTemplate) return
     const content = composeWithStyle(editorHtml, editorStyle)
     const res = await window.api.exportDoc({
-      title: activeDoc.title,
+      title: titleDraft.trim() || activeTemplate.name,
       content,
         format,
     })
@@ -339,6 +309,24 @@ function App() {
       confirmText: '知道了',
       onConfirm: () => {}
     })
+  }
+
+  const handleOpenDoc = async () => {
+    if (!activeDoc?.filePath) {
+      openDialog({
+        title: '无法打开文档',
+        message: '当前文档未关联本地文件，请重新创建或联系管理员。',
+        confirmText: '知道了',
+        onConfirm: () => {},
+      })
+      return
+    }
+    await window.api.openDoc({ filePath: activeDoc.filePath })
+  }
+
+  const handleRevealDoc = async () => {
+    if (!activeDoc?.filePath) return
+    await window.api.revealDoc({ filePath: activeDoc.filePath })
   }
 
   const handleFolderMenuClose = () => {
@@ -535,11 +523,12 @@ function App() {
           editorMenuOpen={editorMenuOpen}
           onToggleEditorMenu={() => setEditorMenuOpen((prev) => !prev)}
           onCloseEditorMenu={() => setEditorMenuOpen(false)}
-          onSaveAsTemplate={handleSaveAsTemplate}
           onExport={(format) => handleExport(format)}
           onPrint={handlePrint}
           onDeleteDoc={handleDeleteDoc}
           onDeleteTemplate={handleDeleteTemplate}
+          onOpenDoc={handleOpenDoc}
+          onRevealDoc={handleRevealDoc}
           activeDoc={activeDoc}
           activeTemplate={activeTemplate}
           formatDate={formatDate}
@@ -648,8 +637,6 @@ function App() {
         onEditTemplate={handleEditTemplate}
         onDeleteTemplate={handleDeleteTemplate}
         onOpenTemplateEditor={handleOpenTemplateEditor}
-        onSaveAsTemplate={handleSaveAsTemplate}
-        canSaveAsTemplate={!!activeDoc}
         editor={templateEditor}
         onCloseEditor={() => setTemplateEditor(null)}
         onEditorNameChange={(value) => {
@@ -711,18 +698,6 @@ function App() {
 }
 
 export default App
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

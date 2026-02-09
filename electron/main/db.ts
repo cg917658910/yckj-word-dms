@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import initSqlJs, { Database } from 'sql.js'
+import { ensureUniquePath, normalizeHtml } from './utils'
 
 export type FolderRow = {
   id: number
@@ -18,15 +19,17 @@ export type DocSummary = {
   snippet: string
   updatedAt: string
   size: number
+  filePath: string | null
 }
 
 export type DocDetail = {
   id: number
   folderId: number | null
   title: string
-  content: string
   updatedAt: string
   createdAt: string
+  filePath: string | null
+  size: number
 }
 
 export type TemplateRow = {
@@ -82,6 +85,11 @@ export type MoveDocInput = {
   folderId: number | null
 }
 
+export type CopyDocInput = {
+  id: number
+  title: string
+}
+
 export type FindReplaceInput = {
   query: string
   replace: string
@@ -111,6 +119,40 @@ let sqlReady: Promise<Database> | null = null
 
 const require = createRequire(import.meta.url)
 const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm')
+
+const ensureDocsDir = () => {
+  const dir = path.join(app.getPath('userData'), 'docx-files')
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true })
+  }
+  return dir
+}
+
+const sanitizeFileName = (input: string) =>
+  input
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || '文档'
+
+const buildDocxHtml = (content?: string) => {
+  const body = normalizeHtml(content || '<p></p>')
+  return `<!doctype html><html><head><meta charset="utf-8"/></head><body>${body}</body></html>`
+}
+
+const writeDocxFile = async (filePath: string, content?: string) => {
+  const htmlToDocx = (await import('html-to-docx')).default
+  const html = buildDocxHtml(content)
+  const docxResult = await htmlToDocx(html)
+  const docxBuffer: Buffer = Buffer.isBuffer(docxResult)
+    ? docxResult
+    : docxResult instanceof ArrayBuffer
+      ? Buffer.from(new Uint8Array(docxResult))
+      : typeof Blob !== 'undefined' && docxResult instanceof Blob
+        ? Buffer.from(new Uint8Array(await docxResult.arrayBuffer()))
+        : Buffer.from(docxResult as any)
+  await fs.promises.writeFile(filePath, docxBuffer)
+}
 
 async function ensureDb() {
   if (db) return db
@@ -145,7 +187,8 @@ async function ensureDb() {
         id integer primary key autoincrement,
         folder_id integer,
         title text not null,
-        content text not null,
+        content text not null default '',
+        file_path text,
         created_at text default (datetime('now')),
         updated_at text default (datetime('now')),
         foreign key (folder_id) references folders(id) on delete set null
@@ -184,8 +227,15 @@ async function ensureDb() {
       run(database, 'alter table templates add column folder_id integer')
     }
 
+    const docColumns = all<{ name: string }>(database, 'pragma table_info(documents)')
+    const hasFilePath = docColumns.some((col) => col.name === 'file_path')
+    if (!hasFilePath) {
+      run(database, 'alter table documents add column file_path text')
+    }
+
     db = database
     await seedIfEmpty(database)
+    await migrateDocumentsToFiles(database)
     saveDb(database, dbPath)
     return database
   })()
@@ -262,6 +312,31 @@ async function seedIfEmpty(database: Database) {
   run(database, 'insert into templates (name, content) values (?, ?)', ['日报模板', '今日事项：\n时间记录：\n待办：'])
 }
 
+async function migrateDocumentsToFiles(database: Database) {
+  const rows = all<{ id: number; title: string; content: string; filePath: string | null }>(
+    database,
+    'select id, title, content, file_path as filePath from documents'
+  )
+  if (!rows.length) return
+  const docsDir = ensureDocsDir()
+  for (const row of rows) {
+    const hasFile = row.filePath && fs.existsSync(row.filePath)
+    if (!hasFile) {
+      const baseName = sanitizeFileName(row.title)
+      const candidate = path.join(docsDir, `${row.id}-${baseName}.docx`)
+      const targetPath = await ensureUniquePath(candidate)
+      await writeDocxFile(targetPath, row.content || '')
+      run(database, 'update documents set file_path = ?, content = ? where id = ?', [
+        targetPath,
+        '',
+        row.id,
+      ])
+    } else if (row.content) {
+      run(database, 'update documents set content = ? where id = ?', ['', row.id])
+    }
+  }
+}
+
 async function listFolders(): Promise<FolderRow[]> {
   const database = await ensureDb()
   return all<FolderRow>(
@@ -281,34 +356,37 @@ export async function listTemplateFolders(): Promise<TemplateFolderRow[]> {
 async function listDocuments(folderId: number | null): Promise<DocSummary[]> {
   const database = await ensureDb()
   const rows = folderId !== null
-    ? all<{ id: number; folderId: number | null; title: string; content: string; updatedAt: string; size: number }>(
+    ? all<{ id: number; folderId: number | null; title: string; filePath: string | null; updatedAt: string }>(
         database,
-        `select id, folder_id as folderId, title, content,
-        updated_at as updatedAt,
-        length(content) as size
+        `select id, folder_id as folderId, title, file_path as filePath,
+        updated_at as updatedAt
         from documents where folder_id = ? order by datetime(created_at) desc`,
         [folderId]
       )
-    : all<{ id: number; folderId: number | null; title: string; content: string; updatedAt: string; size: number }>(
+    : all<{ id: number; folderId: number | null; title: string; filePath: string | null; updatedAt: string }>(
         database,
-        `select id, folder_id as folderId, title, content,
-        updated_at as updatedAt,
-        length(content) as size
+        `select id, folder_id as folderId, title, file_path as filePath,
+        updated_at as updatedAt
         from documents order by datetime(created_at) desc`
       )
 
   return rows.map((row) => {
-    const text = row.content
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
+    let size = 0
+    if (row.filePath && fs.existsSync(row.filePath)) {
+      try {
+        size = fs.statSync(row.filePath).size
+      } catch {
+        size = 0
+      }
+    }
     return {
       id: row.id,
       folderId: row.folderId,
       title: row.title,
-      snippet: text.slice(0, 120),
+      snippet: '',
       updatedAt: row.updatedAt,
-      size: row.size,
+      size,
+      filePath: row.filePath ?? null,
     }
   })
 }
@@ -316,14 +394,14 @@ async function listDocuments(folderId: number | null): Promise<DocSummary[]> {
 async function findAndReplace(input: FindReplaceInput) {
   const database = await ensureDb()
   const rows = input.folderId !== null
-    ? all<{ id: number; title: string; content: string }>(
+    ? all<{ id: number; title: string }>(
         database,
-        'select id, title, content from documents where folder_id = ?',
+        'select id, title from documents where folder_id = ?',
         [input.folderId]
       )
-    : all<{ id: number; title: string; content: string }>(
+    : all<{ id: number; title: string }>(
         database,
-        'select id, title, content from documents'
+        'select id, title from documents'
       )
 
   let updated = 0
@@ -332,14 +410,11 @@ async function findAndReplace(input: FindReplaceInput) {
     const nextTitle = row.title.includes(input.query)
       ? row.title.split(input.query).join(input.replace)
       : row.title
-    const nextContent = row.content.includes(input.query)
-      ? row.content.split(input.query).join(input.replace)
-      : row.content
-    if (nextTitle !== row.title || nextContent !== row.content) {
+    if (nextTitle !== row.title) {
       run(
         database,
-        'update documents set title = ?, content = ?, updated_at = datetime(\'now\') where id = ?',
-        [nextTitle, nextContent, row.id]
+        'update documents set title = ?, updated_at = datetime(\'now\') where id = ?',
+        [nextTitle, row.id]
       )
       updated += 1
     }
@@ -351,24 +426,48 @@ async function findAndReplace(input: FindReplaceInput) {
 
 async function getDocument(id: number): Promise<DocDetail | null> {
   const database = await ensureDb()
-  return get<DocDetail>(
+  const row = get<{
+    id: number
+    folderId: number | null
+    title: string
+    createdAt: string
+    updatedAt: string
+    filePath: string | null
+  }>(
     database,
-    'select id, folder_id as folderId, title, content, created_at as createdAt, updated_at as updatedAt from documents where id = ? ',
+    'select id, folder_id as folderId, title, created_at as createdAt, updated_at as updatedAt, file_path as filePath from documents where id = ? ',
     [id]
   )
+  if (!row) return null
+  let size = 0
+  if (row.filePath && fs.existsSync(row.filePath)) {
+    try {
+      size = fs.statSync(row.filePath).size
+    } catch {
+      size = 0
+    }
+  }
+  return {
+    ...row,
+    filePath: row.filePath ?? null,
+    size,
+  }
 }
 
 async function saveDocument(input: { id: number; title: string; content: string }) {
   const database = await ensureDb()
+  const doc = await getDocument(input.id)
+  if (doc?.filePath) {
+    await writeDocxFile(doc.filePath, input.content)
+  }
   run(database, 'update documents set title = ?, content = ?, updated_at = datetime(\'now\') where id = ?', [
     input.title,
-    input.content,
+    '',
     input.id,
   ])
-  const doc = await getDocument(input.id)
   const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
   saveDb(database, dbPath)
-  return doc
+  return await getDocument(input.id)
 }
 
 async function createFolder(input: CreateFolderInput) {
@@ -449,9 +548,25 @@ async function createDocument(input: CreateDocInput) {
   run(database, 'insert into documents (folder_id, title, content) values (?, ?, ?)', [
     input.folderId,
     input.title,
-    input.content ?? '',
+    '',
   ])
   const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
+  if (row?.id) {
+    const docsDir = ensureDocsDir()
+    const baseName = sanitizeFileName(input.title)
+    const candidate = path.join(docsDir, `${row.id}-${baseName}.docx`)
+    const filePath = await ensureUniquePath(candidate)
+    try {
+      await writeDocxFile(filePath, input.content)
+      run(database, 'update documents set file_path = ?, updated_at = datetime(\'now\') where id = ?', [
+        filePath,
+        row.id,
+      ])
+    } catch (error) {
+      run(database, 'delete from documents where id = ?', [row.id])
+      throw error
+    }
+  }
   const doc = row?.id ? await getDocument(Number(row.id)) : null
   const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
   saveDb(database, dbPath)
@@ -460,8 +575,26 @@ async function createDocument(input: CreateDocInput) {
 
 async function renameDocument(input: RenameDocInput) {
   const database = await ensureDb()
-  run(database, 'update documents set title = ?, updated_at = datetime(\'now\') where id = ?', [
+  const current = await getDocument(input.id)
+  let filePath = current?.filePath ?? null
+  if (current?.filePath && fs.existsSync(current.filePath)) {
+    const dir = path.dirname(current.filePath)
+    const ext = path.extname(current.filePath) || '.docx'
+    const baseName = `${input.id}-${sanitizeFileName(input.title)}`
+    const candidate = path.join(dir, `${baseName}${ext}`)
+    const nextPath = await ensureUniquePath(candidate)
+    if (nextPath !== current.filePath) {
+      try {
+        fs.renameSync(current.filePath, nextPath)
+        filePath = nextPath
+      } catch {
+        filePath = current.filePath
+      }
+    }
+  }
+  run(database, 'update documents set title = ?, file_path = ?, updated_at = datetime(\'now\') where id = ?', [
     input.title,
+    filePath,
     input.id,
   ])
   const doc = await getDocument(input.id)
@@ -482,8 +615,47 @@ async function moveDocument(input: MoveDocInput) {
   return doc
 }
 
+async function copyDocument(input: CopyDocInput) {
+  const database = await ensureDb()
+  const source = await getDocument(input.id)
+  if (!source?.filePath || !fs.existsSync(source.filePath)) return null
+  run(database, 'insert into documents (folder_id, title, content) values (?, ?, ?)', [
+    source.folderId,
+    input.title,
+    '',
+  ])
+  const row = get<{ id: number }>(database, 'select last_insert_rowid() as id')
+  if (!row?.id) return null
+  const docsDir = ensureDocsDir()
+  const baseName = sanitizeFileName(input.title)
+  const candidate = path.join(docsDir, `${row.id}-${baseName}.docx`)
+  const filePath = await ensureUniquePath(candidate)
+  try {
+    fs.copyFileSync(source.filePath, filePath)
+    run(database, 'update documents set file_path = ?, updated_at = datetime(\'now\') where id = ?', [
+      filePath,
+      row.id,
+    ])
+  } catch (error) {
+    run(database, 'delete from documents where id = ?', [row.id])
+    throw error
+  }
+  const doc = await getDocument(row.id)
+  const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
+  saveDb(database, dbPath)
+  return doc
+}
+
 async function deleteDocument(id: number) {
   const database = await ensureDb()
+  const doc = await getDocument(id)
+  if (doc?.filePath && fs.existsSync(doc.filePath)) {
+    try {
+      fs.unlinkSync(doc.filePath)
+    } catch {
+      // ignore delete errors
+    }
+  }
   run(database, 'delete from documents where id = ?', [id])
   const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
   saveDb(database, dbPath)
@@ -560,17 +732,28 @@ async function applyTemplate(payload: { templateId: number; docId: number }) {
   const database = await ensureDb()
   const template = get<{ content: string }>(database, 'select content from templates where id = ?', [payload.templateId])
   if (!template) return null
+  const doc = await getDocument(payload.docId)
+  if (doc?.filePath) {
+    await writeDocxFile(doc.filePath, template.content)
+  } else if (doc) {
+    const docsDir = ensureDocsDir()
+    const baseName = sanitizeFileName(doc.title)
+    const candidate = path.join(docsDir, `${doc.id}-${baseName}.docx`)
+    const filePath = await ensureUniquePath(candidate)
+    await writeDocxFile(filePath, template.content)
+    run(database, 'update documents set file_path = ? where id = ?', [filePath, doc.id])
+  }
   run(database, 'update documents set content = ?, updated_at = datetime(\'now\') where id = ?', [
-    template.content,
+    '',
     payload.docId,
   ])
   run(database, 'update templates set usage_count = coalesce(usage_count,0) + 1, last_used_at = datetime(\'now\') where id = ?', [
     payload.templateId,
   ])
-  const doc = await getDocument(payload.docId)
+  const updated = await getDocument(payload.docId)
   const dbPath = path.join(app.getPath('userData'), 'word-tool.sqlite')
   saveDb(database, dbPath)
-  return doc
+  return updated
 }
 
 async function useTemplate(id: number) {
@@ -604,6 +787,7 @@ export function registerDbIpc() {
   ipcMain.handle('db:create-doc', async (_event, input: CreateDocInput) => createDocument(input))
   ipcMain.handle('db:rename-doc', async (_event, input: RenameDocInput) => renameDocument(input))
   ipcMain.handle('db:move-doc', async (_event, input: MoveDocInput) => moveDocument(input))
+  ipcMain.handle('db:copy-doc', async (_event, input: CopyDocInput) => copyDocument(input))
   ipcMain.handle('db:delete-doc', async (_event, id: number) => deleteDocument(id))
   ipcMain.handle('db:find-replace', async (_event, input: FindReplaceInput) => findAndReplace(input))
   ipcMain.handle('db:list-templates', async () => listTemplates())
