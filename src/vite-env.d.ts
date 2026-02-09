@@ -14,15 +14,17 @@ type DocSummary = {
   snippet: string
   updatedAt: string
   size: number
+  filePath: string | null
 }
 
 type DocDetail = {
   id: number
   folderId: number | null
   title: string
-  content: string
   updatedAt: string
   createdAt: string
+  filePath: string | null
+  size: number
 }
 
 type TemplateRow = {
@@ -41,6 +43,8 @@ interface Window {
   api: {
     print: (payload: { title: string; content: string }) => Promise<boolean>
     exportDoc: (payload: { title: string; content: string; format: 'pdf' | 'word' | 'html' }) => Promise<boolean>
+    openDoc: (payload: { filePath: string }) => Promise<boolean>
+    revealDoc: (payload: { filePath: string }) => Promise<boolean>
     importTemplates: () => Promise<boolean>
     uploadTemplateFiles: (folderId?: number | null) => Promise<boolean>
     uploadTemplateFolder: (folderId?: number | null) => Promise<boolean>
@@ -60,6 +64,7 @@ interface Window {
       createDoc: (input: { folderId: number | null; title: string; content?: string }) => Promise<DocDetail | null>
       renameDoc: (input: { id: number; title: string }) => Promise<DocDetail | null>
       moveDoc: (input: { id: number; folderId: number | null }) => Promise<DocDetail | null>
+      copyDoc: (input: { id: number; title: string }) => Promise<DocDetail | null>
       deleteDoc: (id: number) => Promise<boolean>
       findReplace: (input: { query: string; replace: string; folderId: number | null }) => Promise<number>
       listTemplates: () => Promise<TemplateRow[]>

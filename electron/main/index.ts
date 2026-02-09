@@ -110,5 +110,16 @@ ipcMain.handle('open-win', (_, arg) => {
   }
 })
 
+ipcMain.handle('doc:open', async (_event, payload: { filePath: string }) => {
+  if (!payload?.filePath) return false
+  const result = await shell.openPath(payload.filePath)
+  return result === ''
+})
+
+ipcMain.handle('doc:reveal', async (_event, payload: { filePath: string }) => {
+  if (!payload?.filePath) return false
+  shell.showItemInFolder(payload.filePath)
+  return true
+})
 
 

@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 contextBridge.exposeInMainWorld('api', {
   print: (payload: { title: string; content: string }) => ipcRenderer.invoke('doc:print', payload),
   exportDoc: (payload: { title: string; content: string; format: 'pdf' | 'word'|'html' | 'htm' }) => ipcRenderer.invoke('doc:export', payload),
+  openDoc: (payload: { filePath: string }) => ipcRenderer.invoke('doc:open', payload),
+  revealDoc: (payload: { filePath: string }) => ipcRenderer.invoke('doc:reveal', payload),
   uploadTemplateFiles: (folderId?: number | null) => ipcRenderer.invoke('template:upload-files', { folderId: folderId ?? null }),
   uploadTemplateFolder: (folderId?: number | null) => ipcRenderer.invoke('template:upload-folder', { folderId: folderId ?? null }),
   db: {
@@ -44,11 +46,12 @@ contextBridge.exposeInMainWorld('api', {
     renameTemplateFolder: (input: { id: number; name: string }) =>
       ipcRenderer.invoke('db:rename-template-folder', input),
     deleteTemplateFolder: (id: number) => ipcRenderer.invoke('db:delete-template-folder', id),
-      createDoc: (input: { folderId: number | null; title: string; content?: string }) =>
-        ipcRenderer.invoke('db:create-doc', input),
-      renameDoc: (input: { id: number; title: string }) => ipcRenderer.invoke('db:rename-doc', input),
-      moveDoc: (input: { id: number; folderId: number | null }) => ipcRenderer.invoke('db:move-doc', input),
-      deleteDoc: (id: number) => ipcRenderer.invoke('db:delete-doc', id),
+    createDoc: (input: { folderId: number | null; title: string; content?: string }) =>
+      ipcRenderer.invoke('db:create-doc', input),
+    renameDoc: (input: { id: number; title: string }) => ipcRenderer.invoke('db:rename-doc', input),
+    moveDoc: (input: { id: number; folderId: number | null }) => ipcRenderer.invoke('db:move-doc', input),
+    copyDoc: (input: { id: number; title: string }) => ipcRenderer.invoke('db:copy-doc', input),
+    deleteDoc: (id: number) => ipcRenderer.invoke('db:delete-doc', id),
     findReplace: (input: { query: string; replace: string; folderId: number | null }) =>
       ipcRenderer.invoke('db:find-replace', input),
     listTemplates: () => ipcRenderer.invoke('db:list-templates'),
