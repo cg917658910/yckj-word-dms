@@ -18,6 +18,10 @@ type Props = {
   activeDoc: DocDetail | null
   activeTemplate: TemplateRow | null
   formatDate: (value: string) => string
+  docPreviewHtml: string
+  docPreviewLoading: boolean
+  templatePreviewHtml: string
+  templatePreviewLoading: boolean
 }
 
 const EditorPane = ({
@@ -38,6 +42,10 @@ const EditorPane = ({
   activeDoc,
   activeTemplate,
   formatDate,
+  docPreviewHtml,
+  docPreviewLoading,
+  templatePreviewHtml,
+  templatePreviewLoading,
 }: Props) => {
   const hasContent = viewMode === 'doc' ? !!activeDoc : !!activeTemplate
 
@@ -121,22 +129,59 @@ const EditorPane = ({
               </div>
             </div>
           </div>
-        ) :(
+        ) : viewMode === 'doc' ? (
+          <div className='editor-paper doc-file-panel'>
+            <div className='doc-file-card'>
+              <div className='doc-file-title'>{activeDoc?.title ?? '未命名文档'}</div>
+              <div className='doc-file-meta'>
+                <div>
+                  <span>最近更新：</span>
+                  <span>{activeDoc ? formatDate(activeDoc.updatedAt) : '-'}</span>
+                </div>
+                <div>
+                  <span>文件大小：</span>
+                  <span>{activeDoc ? `${(activeDoc.size / 1024).toFixed(1)} KB` : '-'}</span>
+                </div>
+                <div className='doc-file-path'>
+                  <span>文件路径：</span>
+                  <span>{activeDoc?.filePath ?? '未关联文件'}</span>
+                </div>
+              </div>
+              <div className='doc-file-actions'>
+                <button className='primary' onClick={onOpenDoc} disabled={!activeDoc}>
+                  使用本地 Word/WPS 编辑
+                </button>
+                <button onClick={onRevealDoc} disabled={!activeDoc}>
+                  在文件夹中显示
+                </button>
+              </div>
+              <div className='doc-preview'>
+                {docPreviewLoading ? (
+                  <div className='doc-preview-placeholder'>正在加载预览...</div>
+                ) : docPreviewHtml ? (
+                  <div className='doc-preview-body' dangerouslySetInnerHTML={{ __html: docPreviewHtml }} />
+                ) : (
+                  <div className='doc-preview-placeholder'>暂无预览</div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
           <div className='editor-paper doc-file-panel'>
             <div className='doc-file-card'>
               <div className='doc-file-title'>{activeTemplate?.name ?? '未命名模板'}</div>
               <div className='doc-file-meta'>
                 <div>
-                  <span>上次使用：</span>
-                  <span>{activeTemplate ? formatDate(activeTemplate?.updatedAt) : '-'}</span>
+                  <span>最近更新：</span>
+                  <span>{activeTemplate ? formatDate(activeTemplate.updatedAt) : '-'}</span>
                 </div>
                 <div>
-                  <span>使用次数：</span>
-                  <span>{activeTemplate ? `${(activeTemplate?.usageCount)}` : '-'}</span>
+                  <span>文件大小：</span>
+                  <span>{activeTemplate ? `${((activeTemplate.size ?? 0) / 1024).toFixed(1)} KB` : '-'}</span>
                 </div>
                 <div className='doc-file-path'>
-                  <span>模板路径：</span>
-                  <span>{activeTemplate?.filePath ?? '未关联模板'}</span>
+                  <span>文件路径：</span>
+                  <span>{activeTemplate?.filePath ?? '未关联文件'}</span>
                 </div>
               </div>
               <div className='doc-file-actions'>
@@ -146,6 +191,15 @@ const EditorPane = ({
                 <button onClick={onRevealTemplate} disabled={!activeTemplate}>
                   在文件夹中显示
                 </button>
+              </div>
+              <div className='doc-preview'>
+                {templatePreviewLoading ? (
+                  <div className='doc-preview-placeholder'>正在加载预览...</div>
+                ) : templatePreviewHtml ? (
+                  <div className='doc-preview-body' dangerouslySetInnerHTML={{ __html: templatePreviewHtml }} />
+                ) : (
+                  <div className='doc-preview-placeholder'>暂无预览</div>
+                )}
               </div>
             </div>
           </div>

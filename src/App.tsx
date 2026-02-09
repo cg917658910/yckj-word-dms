@@ -37,6 +37,10 @@ function App() {
   const [moveTargetId, setMoveTargetId] = useState<number | null>(null)
   const [templatePreviewHtml, setTemplatePreviewHtml] = useState('')
   const [templatePreviewLoading, setTemplatePreviewLoading] = useState(false)
+  const [docPreviewHtml, setDocPreviewHtml] = useState('')
+  const [docPreviewLoading, setDocPreviewLoading] = useState(false)
+  const [templateDetailPreviewHtml, setTemplateDetailPreviewHtml] = useState('')
+  const [templateDetailPreviewLoading, setTemplateDetailPreviewLoading] = useState(false)
 
   const openDialog = (state: DialogState) => {
     setDialog(state)
@@ -197,6 +201,42 @@ function App() {
       cancelled = true
     }
   }, [templatePickId, templates])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!activeDoc?.filePath) {
+      setDocPreviewHtml('')
+      setDocPreviewLoading(false)
+      return () => {}
+    }
+    setDocPreviewLoading(true)
+    window.api.previewFile({ filePath: activeDoc.filePath }).then((html) => {
+      if (cancelled) return
+      setDocPreviewHtml(html || '')
+      setDocPreviewLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [activeDoc?.filePath])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!activeTemplate?.filePath) {
+      setTemplateDetailPreviewHtml('')
+      setTemplateDetailPreviewLoading(false)
+      return () => {}
+    }
+    setTemplateDetailPreviewLoading(true)
+    window.api.previewFile({ filePath: activeTemplate.filePath }).then((html) => {
+      if (cancelled) return
+      setTemplateDetailPreviewHtml(html || '')
+      setTemplateDetailPreviewLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [activeTemplate?.filePath])
 
   const handleTitleBlur = async () => {
     if (!titleDraft.trim()) {
@@ -487,6 +527,10 @@ function App() {
           activeDoc={activeDoc}
           activeTemplate={activeTemplate}
           formatDate={formatDate}
+          docPreviewHtml={docPreviewHtml}
+          docPreviewLoading={docPreviewLoading}
+          templatePreviewHtml={templateDetailPreviewHtml}
+          templatePreviewLoading={templateDetailPreviewLoading}
         />
 
       {dialog ? (
@@ -640,8 +684,6 @@ function App() {
 }
 
 export default App
-
-
 
 
 

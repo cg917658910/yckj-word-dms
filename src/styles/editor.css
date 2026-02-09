@@ -222,6 +222,26 @@
   cursor: not-allowed;
 }
 
+.doc-preview {
+  margin-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+}
+
+.doc-preview-placeholder {
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.doc-preview-body {
+  max-height: 420px;
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  padding: 16px;
+  background: #f8fafc;
+}
+
 .editor-paper .ck-editor__editable {
   min-height: 760px;
   color: #1f2937;
