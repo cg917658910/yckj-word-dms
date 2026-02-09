@@ -284,42 +284,6 @@ function App() {
     await window.api.revealDoc({ filePath: activeTemplate.filePath })
   }
 
-  const handleOpenDoc = async () => {
-    if (!activeDoc?.filePath) {
-      openDialog({
-        title: '无法打开文档',
-        message: '当前文档未关联本地文件，请重新创建或联系管理员。',
-        confirmText: '知道了',
-        onConfirm: () => {},
-      })
-      return
-    }
-    await window.api.openDoc({ filePath: activeDoc.filePath })
-  }
-
-  const handleRevealDoc = async () => {
-    if (!activeDoc?.filePath) return
-    await window.api.revealDoc({ filePath: activeDoc.filePath })
-  }
-
-  const handleOpenTemplate = async () => {
-    if (!activeTemplate?.filePath) {
-      openDialog({
-        title: '无法打开模板',
-        message: '当前模板未关联本地文件，请重新创建或联系管理员。',
-        confirmText: '知道了',
-        onConfirm: () => {},
-      })
-      return
-    }
-    await window.api.openDoc({ filePath: activeTemplate.filePath })
-  }
-
-  const handleRevealTemplate = async () => {
-    if (!activeTemplate?.filePath) return
-    await window.api.revealDoc({ filePath: activeTemplate.filePath })
-  }
-
   const handleFolderMenuClose = () => {
     setMenu(null)
     setMenuSubOpen(false)
