@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef } from 'react'
-import CanvasEditor, { type CanvasEditorBlock } from '../modules/canvasEditor'
+import Editor, { type CanvasEditorBlock } from '@hufe921/canvas-editor'
 import type { DocDetail, TemplateRow } from '../types'
 
 type Props = {
@@ -47,16 +47,12 @@ const EditorPane = ({
 }: Props) => {
   const hasContent = viewMode === 'doc' ? !!activeDoc : !!activeTemplate
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const editorRef = useRef<CanvasEditor | null>(null)
+  const editorRef = useRef<Editor | null>(null)
   const lastHtmlRef = useRef<string>('')
 
   const htmlToBlocks = (html: string): CanvasEditorBlock[] => {
     if (!html) return [{ value: '' }]
-    const holder = document.createElement('div')
-    holder.innerHTML = html
-    const text = (holder.innerText || holder.textContent || '').trim()
-    if (!text) return [{ value: '' }]
-    return text.split(/\n+/).map((line) => ({ value: line.trim() }))
+    return [{ value: html }]
   }
 
   useEffect(() => {
@@ -64,7 +60,7 @@ const EditorPane = ({
     const container = containerRef.current
     if (!container || editorRef.current) return undefined
     const initialBlocks = htmlToBlocks(value)
-    editorRef.current = new CanvasEditor(container, {
+    editorRef.current = new Editor(container, {
       main: initialBlocks,
       placeholder: '直接输入内容，或使用模板快速创建文档',
       onChange: (_main, html) => {
