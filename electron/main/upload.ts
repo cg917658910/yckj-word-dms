@@ -1,6 +1,5 @@
 import { dialog, ipcMain } from 'electron'
-import { createTemplate, createTemplateFolder, listTemplateFolders } from './db'
-import { toHtmlFromFile } from './import'
+import { createTemplateFolder, createTemplateFromFile, listTemplateFolders } from './db'
 
 export function registerUploadIpc() {
   ipcMain.handle('template:upload-files', async (_event, payload?: { folderId?: number | null }) => {
@@ -18,9 +17,7 @@ export function registerUploadIpc() {
         const ext = pathMod.extname(filePath).toLowerCase()
         if (!allowedExtensionsStr.includes(ext)) continue
         const base = pathMod.basename(filePath, ext)
-        const html = await toHtmlFromFile(filePath)
-        if (!html) continue
-        await createTemplate({ name: base, content: html, folderId: payload?.folderId ?? null })
+        await createTemplateFromFile({ name: base, sourcePath: filePath, folderId: payload?.folderId ?? null })
       }
     } catch (error) {
       dialog.showErrorBox('上传失败', '请确保文件格式正确且内容不损坏。')
@@ -62,9 +59,7 @@ export function registerUploadIpc() {
           if (!['.pdf', '.docx', '.html', '.htm'].includes(ext)) continue
           const base = pathMod.basename(entry.name, ext)
           try {
-            const html = await toHtmlFromFile(abs)
-            if (!html) continue
-            await createTemplate({ name: base, content: html, folderId: parentId })
+            await createTemplateFromFile({ name: base, sourcePath: abs, folderId: parentId })
           } catch (error) {
             throw error
           }

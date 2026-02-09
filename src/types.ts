@@ -23,15 +23,17 @@ export type DocSummary = {
   snippet: string
   updatedAt: string
   size: number
+  filePath: string | null
 }
 
 export type DocDetail = {
   id: number
   folderId: number | null
   title: string
-  content: string
   updatedAt: string
   createdAt: string
+  filePath: string | null
+  size: number
 }
 
 export type TemplateRow = {
@@ -39,6 +41,8 @@ export type TemplateRow = {
   name: string
   content: string
   updatedAt: string
+  filePath?: string | null
+  size?: number
   lastUsedAt?: string | null
   usageCount?: number | null
   folderId?: number | null

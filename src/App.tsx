@@ -13,7 +13,7 @@ import TemplateMenu from './modules/template/TemplateMenu'
 import TemplatePanels from './modules/template/TemplatePanels'
 import TemplateSidebar from './modules/template/TemplateSidebar'
 import type { DialogState, FolderNode, MenuState } from './types'
-import { stripHtml, toDocSummary } from './utils/tree'
+import { toDocSummary } from './utils/tree'
 
 function formatDate(value: string) {
   if (!value) return ''
@@ -30,13 +30,17 @@ function App() {
   const [menuSubOpen, setMenuSubOpen] = useState(false)
   const [hoverFolderId, setHoverFolderId] = useState<number | null>(null)
   const [titleDraft, setTitleDraft] = useState('')
-  const [editorHtml, setEditorHtml] = useState('')
-  const [editorStyle, setEditorStyle] = useState('')
   const [editorMenuOpen, setEditorMenuOpen] = useState(false)
   const [findReplaceOpen, setFindReplaceOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'doc' | 'template'>('doc')
   const [movePanel, setMovePanel] = useState<{ mode: 'doc' | 'template'; itemId: number } | null>(null)
   const [moveTargetId, setMoveTargetId] = useState<number | null>(null)
+  const [templatePreviewHtml, setTemplatePreviewHtml] = useState('')
+  const [templatePreviewLoading, setTemplatePreviewLoading] = useState(false)
+  const [docPreviewHtml, setDocPreviewHtml] = useState('')
+  const [docPreviewLoading, setDocPreviewLoading] = useState(false)
+  const [templateDetailPreviewHtml, setTemplateDetailPreviewHtml] = useState('')
+  const [templateDetailPreviewLoading, setTemplateDetailPreviewLoading] = useState(false)
 
   const openDialog = (state: DialogState) => {
     setDialog(state)
@@ -100,13 +104,11 @@ function App() {
     collapsedTemplateFolders,
       templatePanel,
       rootTemplates,
-    templateEditor,
     templateSearch,
     templatePickId,
     templateMenu,
     filteredTemplates,
     setTemplatePanel,
-    setTemplateEditor,
     setTemplateSearch,
     setTemplatePickId,
     setTemplateMenu,
@@ -122,8 +124,6 @@ function App() {
     handleDeleteTemplateFolder,
     handleCreateTemplate,
     handleEditTemplate,
-    handleOpenTemplateEditor,
-    handleTemplateEditorSave,
     handleRenameTemplate,
     handleDeleteTemplate,
     handleCopyTemplate,
@@ -146,19 +146,6 @@ function App() {
     boot()
   }, [])
 
-  const extractImportedStyle = (html: string) => {
-    if (!html) return { html: '', css: '' }
-    const styles: string[] = []
-    const cleaned = html.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (_match, css) => {
-      if (css && typeof css === 'string') styles.push(css)
-      return ''
-    })
-    return { html: cleaned.trim(), css: styles.join('\n').trim() }
-  }
-
-  const composeWithStyle = (html: string, css: string) =>
-    css ? `<style data-imported="true">${css}</style>${html}` : html
-
   const buildMoveOptions = (nodes: FolderNode[], depth = 0, acc: { id: number; label: string }[] = []) => {
     nodes.forEach((node) => {
       const prefix = depth ? '— '.repeat(depth) : ''
@@ -174,18 +161,12 @@ function App() {
   useEffect(() => {
     if (viewMode !== 'doc') return
     if (!activeDoc) return
-    const parsed = extractImportedStyle(activeDoc.content || '')
-    setEditorStyle(parsed.css)
-    setEditorHtml(parsed.html)
     setTitleDraft(activeDoc.title)
   }, [activeDoc, viewMode])
 
   useEffect(() => {
     if (viewMode !== 'template') return
     if (!activeTemplate) return
-    const parsed = extractImportedStyle(activeTemplate.content || '')
-    setEditorStyle(parsed.css)
-    setEditorHtml(parsed.html)
     setTitleDraft(activeTemplate.name)
   }, [activeTemplate, viewMode])
 
@@ -197,58 +178,65 @@ function App() {
     }
   }, [viewMode, activeDoc, activeTemplate])
 
-  const handleSave = async () => {
-    if (viewMode === 'doc') {
-      if (!activeDoc) return
-      const content = composeWithStyle(editorHtml, editorStyle)
-      const next = await window.api.db.saveDoc({
-        id: activeDoc.id,
-        title: titleDraft.trim() || activeDoc.title,
-        content,
-      })
-      setActiveDoc(next)
-      if (next) {
-        const nextDocs = docs.map((doc) =>
-          doc.id === next.id ? { ...doc, title: next.title, updatedAt: next.updatedAt, snippet: stripHtml(next.content || '').slice(0, 120) } : doc
-        )
-        syncTreeWithDocs(nextDocs)
-      }
-      return
+  useEffect(() => {
+    let cancelled = false
+    if (!templatePickId) {
+      setTemplatePreviewHtml('')
+      setTemplatePreviewLoading(false)
+      return () => {}
     }
-    if (viewMode === 'template') {
-      if (!activeTemplate) return
-      const next = {
-        ...activeTemplate,
-        name: titleDraft.trim() || activeTemplate.name,
-        content: composeWithStyle(editorHtml, editorStyle),
-      }
-      await window.api.db.updateTemplate({
-        id: activeTemplate.id,
-        name: next.name,
-        content: next.content,
-        folderId: next.folderId ?? null,
-      })
-      setActiveTemplate(next)
-      const nextTemplates = templates.map((tpl) => (tpl.id === next.id ? { ...tpl, name: next.name, content: next.content, updatedAt: new Date().toISOString() } : tpl))
-      syncTreeWithTemplates(nextTemplates)
+    const target = templates.find((tpl) => tpl.id === templatePickId)
+    if (!target?.filePath) {
+      setTemplatePreviewHtml('')
+      setTemplatePreviewLoading(false)
+      return () => {}
     }
-  }
+    setTemplatePreviewLoading(true)
+    window.api.previewFile({ filePath: target.filePath }).then((html) => {
+      if (cancelled) return
+      setTemplatePreviewHtml(html || '')
+      setTemplatePreviewLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [templatePickId, templates])
 
   useEffect(() => {
-    if (viewMode === 'doc' && activeDoc) {
-      const timer = setTimeout(() => {
-        handleSave()
-      }, 600)
-      return () => clearTimeout(timer)
+    let cancelled = false
+    if (!activeDoc?.filePath) {
+      setDocPreviewHtml('')
+      setDocPreviewLoading(false)
+      return () => {}
     }
-    if (viewMode === 'template' && activeTemplate) {
-      const timer = setTimeout(() => {
-        handleSave()
-      }, 600)
-      return () => clearTimeout(timer)
+    setDocPreviewLoading(true)
+    window.api.previewFile({ filePath: activeDoc.filePath }).then((html) => {
+      if (cancelled) return
+      setDocPreviewHtml(html || '')
+      setDocPreviewLoading(false)
+    })
+    return () => {
+      cancelled = true
     }
-    return undefined
-  }, [editorHtml, titleDraft, viewMode, activeDoc, activeTemplate])
+  }, [activeDoc?.filePath])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!activeTemplate?.filePath) {
+      setTemplateDetailPreviewHtml('')
+      setTemplateDetailPreviewLoading(false)
+      return () => {}
+    }
+    setTemplateDetailPreviewLoading(true)
+    window.api.previewFile({ filePath: activeTemplate.filePath }).then((html) => {
+      if (cancelled) return
+      setTemplateDetailPreviewHtml(html || '')
+      setTemplateDetailPreviewLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [activeTemplate?.filePath])
 
   const handleTitleBlur = async () => {
     if (!titleDraft.trim()) {
@@ -262,8 +250,11 @@ function App() {
       const detail = await window.api.db.renameDoc({ id: activeDoc.id, title: titleDraft.trim() })
       if (detail) {
         setActiveDoc(detail)
-        setEditorHtml(detail.content || '')
-        const nextDocs = docs.map((doc) => (doc.id === detail.id ? { ...doc, title: detail.title, updatedAt: detail.updatedAt } : doc))
+        const nextDocs = docs.map((doc) =>
+          doc.id === detail.id
+            ? { ...doc, title: detail.title, updatedAt: detail.updatedAt, filePath: detail.filePath ?? null, size: detail.size }
+            : doc
+        )
         syncTreeWithDocs(nextDocs)
       }
       return
@@ -271,16 +262,14 @@ function App() {
     if (viewMode === 'template') {
       if (!activeTemplate) return
       if (titleDraft.trim() === activeTemplate.name) return
-      await window.api.db.updateTemplate({
+      await window.api.db.renameTemplate({
         id: activeTemplate.id,
         name: titleDraft.trim(),
-        content: activeTemplate.content,
-        folderId: activeTemplate.folderId ?? null,
       })
-      const next = { ...activeTemplate, name: titleDraft.trim() }
-      setActiveTemplate(next)
-      const nextTemplates = templates.map((tpl) => (tpl.id === next.id ? { ...tpl, name: next.name } : tpl))
+      const nextTemplates = await window.api.db.listTemplates()
       syncTreeWithTemplates(nextTemplates)
+      const next = nextTemplates.find((tpl) => tpl.id === activeTemplate.id) ?? null
+      setActiveTemplate(next)
     }
   }
 
@@ -292,7 +281,6 @@ function App() {
     const nextDocs = [toDocSummary(detail), ...docs]
     syncTreeWithDocs(nextDocs)
     setActiveDoc(detail)
-    setEditorHtml(detail.content || '')
   }
 
   const handleOpenTemplatePanel = (folderId: number | null, mode: 'create' | 'manage') => {
@@ -300,45 +288,40 @@ function App() {
     setTemplatePanel({ folderId: targetFolderId ?? null, mode })
   }
 
-  const handleSaveAsTemplate = async () => {
-    if (!activeDoc) return
-    setTemplatePanel({ folderId: activeTemplateFolderId ?? null, mode: 'create' })
-    setTemplateEditor({
-      mode: 'create',
-      name: activeDoc.title,
-      content: composeWithStyle(editorHtml, editorStyle),
-    })
-  }
-
-  const handlePrint = async () => {
-    if (!activeDoc) return
-    const content = composeWithStyle(editorHtml, editorStyle)
-    await window.api.print({ title: activeDoc.title, content })
-  }
-
-  const handleExport = async (format: 'pdf' | 'word' | 'html') => {
-    if (!activeDoc) return
-    const content = composeWithStyle(editorHtml, editorStyle)
-    const res = await window.api.exportDoc({
-      title: activeDoc.title,
-      content,
-        format,
-    })
-    if (!res) {
+  const handleOpenDoc = async () => {
+    if (!activeDoc?.filePath) {
       openDialog({
-        title: '导出失败',
-        message: '导出过程中发生错误，请稍后再试。',
+        title: '无法打开文档',
+        message: '当前文档未关联本地文件，请重新创建或联系管理员。',
         confirmText: '知道了',
-        onConfirm: () => {}
+        onConfirm: () => {},
       })
-      return;
+      return
     }
-    openDialog({
-      title: '导出成功',
-      message: '文档已成功导出到您选择的位置。',
-      confirmText: '知道了',
-      onConfirm: () => {}
-    })
+    await window.api.openDoc({ filePath: activeDoc.filePath })
+  }
+
+  const handleRevealDoc = async () => {
+    if (!activeDoc?.filePath) return
+    await window.api.revealDoc({ filePath: activeDoc.filePath })
+  }
+
+  const handleOpenTemplate = async () => {
+    if (!activeTemplate?.filePath) {
+      openDialog({
+        title: '无法打开模板',
+        message: '当前模板未关联本地文件，请重新创建或联系管理员。',
+        confirmText: '知道了',
+        onConfirm: () => {},
+      })
+      return
+    }
+    await window.api.openDoc({ filePath: activeTemplate.filePath })
+  }
+
+  const handleRevealTemplate = async () => {
+    if (!activeTemplate?.filePath) return
+    await window.api.revealDoc({ filePath: activeTemplate.filePath })
   }
 
   const handleFolderMenuClose = () => {
@@ -535,17 +518,19 @@ function App() {
           editorMenuOpen={editorMenuOpen}
           onToggleEditorMenu={() => setEditorMenuOpen((prev) => !prev)}
           onCloseEditorMenu={() => setEditorMenuOpen(false)}
-          onSaveAsTemplate={handleSaveAsTemplate}
-          onExport={(format) => handleExport(format)}
-          onPrint={handlePrint}
           onDeleteDoc={handleDeleteDoc}
           onDeleteTemplate={handleDeleteTemplate}
+          onOpenDoc={handleOpenDoc}
+          onRevealDoc={handleRevealDoc}
+          onOpenTemplate={handleOpenTemplate}
+          onRevealTemplate={handleRevealTemplate}
           activeDoc={activeDoc}
           activeTemplate={activeTemplate}
           formatDate={formatDate}
-          value={editorHtml}
-          onChange={setEditorHtml}
-          editorStyle={editorStyle}
+          docPreviewHtml={docPreviewHtml}
+          docPreviewLoading={docPreviewLoading}
+          templatePreviewHtml={templateDetailPreviewHtml}
+          templatePreviewLoading={templateDetailPreviewLoading}
         />
 
       {dialog ? (
@@ -647,20 +632,8 @@ function App() {
         }}
         onEditTemplate={handleEditTemplate}
         onDeleteTemplate={handleDeleteTemplate}
-        onOpenTemplateEditor={handleOpenTemplateEditor}
-        onSaveAsTemplate={handleSaveAsTemplate}
-        canSaveAsTemplate={!!activeDoc}
-        editor={templateEditor}
-        onCloseEditor={() => setTemplateEditor(null)}
-        onEditorNameChange={(value) => {
-          if (!templateEditor) return
-          setTemplateEditor({ ...templateEditor, name: value })
-        }}
-                onEditorSave={handleTemplateEditorSave}
-        onEditorContentChange={(value) => {
-          if (!templateEditor) return
-          setTemplateEditor({ ...templateEditor, content: value })
-        }}
+        previewHtml={templatePreviewHtml}
+        previewLoading={templatePreviewLoading}
       />
 
       <MovePanel
@@ -711,29 +684,6 @@ function App() {
 }
 
 export default App
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

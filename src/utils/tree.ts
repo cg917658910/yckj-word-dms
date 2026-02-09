@@ -66,15 +66,15 @@ export const stripHtml = (html: string) =>
     .trim()
 
 export const toDocSummary = (detail: DocDetail): DocSummary => {
-  const text = stripHtml(detail.content || '')
   return {
     id: detail.id,
     folderId: detail.folderId ?? null,
     title: detail.title,
-    snippet: text.slice(0, 120),
+    snippet: '',
     updatedAt: detail.updatedAt,
     createdAt: detail.createdAt,
-    size: (detail.content || '').length,
+    size: detail.size,
+    filePath: detail.filePath ?? null,
   }
 }
 
@@ -87,7 +87,8 @@ export const toTemplateSummary = (template: TemplateRow): DocSummary => {
     snippet: text.slice(0, 120),
     updatedAt: template.updatedAt,
     createdAt: template.updatedAt,
-    size: (template.content || '').length,
+    size: template.size ?? (template.content || '').length,
+    filePath: template.filePath ?? null,
   }
 }
 
