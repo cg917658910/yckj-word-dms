@@ -109,7 +109,7 @@ const EditorPane = ({
   ) => {
     if (!editorRef.current) return
     const cmd = editorRef.current.command
-    const preserve = options.preserveSelection !== false
+    let preserve = options.preserveSelection !== false
     let range = preserve ? options.range ?? savedRangeRef.current ?? (cmd as any).getRange?.() : null
     if (range && (range.startIndex == null || range.endIndex == null || range.startIndex < 0 || range.endIndex < 0)) {
       range = null
@@ -118,8 +118,21 @@ const EditorPane = ({
       cmd.executeFocus()
       range = preserve ? (cmd as any).getRange?.() : null
     }
-    if (preserve && !range) return
+    if (preserve && !range) {
+      preserve = false
+    }
     try {
+      if (range) {
+        cmd.executeSetRange(
+          range.startIndex,
+          range.endIndex,
+          range.tableId,
+          range.startTdIndex,
+          range.endTdIndex,
+          range.startTrIndex,
+          range.endTrIndex
+        )
+      }
       fn(cmd)
     } catch (error) {
       console.error(error)
@@ -201,9 +214,7 @@ const EditorPane = ({
     editorRef.current?.destroy()
     const data = parseEditorData(value)
     const instance = new Editor(container, data as any, {
-      // 椤电湁
       header: { disabled:true },
-      // 椤佃剼
       footer: { disabled:true },
     })
     instance.use(docxPlugin)
@@ -211,25 +222,25 @@ const EditorPane = ({
     const docxFileInput = document.querySelector<HTMLInputElement>('#file-docx');
     instance.register.contextMenuList([
       {
-        name: "瀵煎叆Word",
+        name: "导入Word",
         when: (payload) => true,
         callback: (command) => {
           docxFileInput?.click();
         },
       },
       {
-        name: "瀵煎嚭涓篜DF",
+        name: "导出为PDF",
         when: (payload) => true,
         callback: (command) => {
           onExport('pdf') 
         },
       },
       {
-        name: "瀵煎嚭涓篧ord",
+        name: "导出为Word",
         when: (payload) => true,
         callback: (command) => {
           (command as any).executeExportDocx({
-            fileName: titleDraft || '鏂囨。',
+            fileName: titleDraft || '文档',
           });
         },
       },
@@ -252,13 +263,19 @@ const EditorPane = ({
     };
   }
     editorRef.current = instance
+    savedRangeRef.current = null
     lastValueRef.current = value
 
     const handleChange = scheduleSave
+    const handlePositionChange = () => {
+      captureRange()
+    }
     if ((instance as { listener?: { contentChange?: () => void } }).listener) {
       ;(instance as { listener: { contentChange?: () => void } }).listener.contentChange = handleChange
     }
     instance.eventBus.on('contentChange', handleChange)
+    instance.eventBus.on('positionContextChange', handlePositionChange)
+    instance.eventBus.on('positionContextChange', handlePositionChange)
 
     if (onHtmlChange) {
       onHtmlChange(getHtml(instance))
@@ -266,6 +283,8 @@ const EditorPane = ({
 
     return () => {
       instance.eventBus.off?.('contentChange', handleChange)
+      instance.eventBus.off?.('positionContextChange', handlePositionChange)
+      instance.eventBus.off?.('positionContextChange', handlePositionChange)
       instance.destroy()
       if (editorRef.current === instance) {
         editorRef.current = null
@@ -307,7 +326,7 @@ const EditorPane = ({
                 run((cmd) => cmd.executeTitle(null), { range: savedRangeRef.current })
                 return
               }
-              const level = Number(value) as unknown as TitleLevel
+              const level = value as TitleLevel
               run((cmd) => cmd.executeTitle(level), { range: savedRangeRef.current })
             }}
           >
@@ -374,7 +393,7 @@ const EditorPane = ({
           <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.LEFT), { range: savedRangeRef.current })} title='左对齐'>
             L
           </button>
-          <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.CENTER), { range: savedRangeRef.current })} title='灞呬腑'>
+          <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.CENTER), { range: savedRangeRef.current })} title='居中'>
             C
           </button>
           <button className='tool' onClick={() => run((cmd) => cmd.executeRowFlex(RowFlex.RIGHT), { range: savedRangeRef.current })} title='右对齐'>
@@ -511,7 +530,3 @@ const EditorPane = ({
 }
 
 export default EditorPane
-
-
-
-

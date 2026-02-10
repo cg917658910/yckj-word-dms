@@ -13,8 +13,8 @@ import TemplateMenu from './modules/template/TemplateMenu'
 import TemplatePanels from './modules/template/TemplatePanels'
 import TemplateSidebar from './modules/template/TemplateSidebar'
 import type { DialogState, FolderNode, MenuState } from './types'
-import { toDocSummary } from './utils/tree'
 import { createEmptyEditorContent, extractEditorText, renderEditorHtml } from './utils/editor'
+import { toDocSummary } from './utils/tree'
 
 function formatDate(value: string) {
   if (!value) return ''
@@ -32,6 +32,7 @@ function App() {
   const [hoverFolderId, setHoverFolderId] = useState<number | null>(null)
   const [titleDraft, setTitleDraft] = useState('')
   const [editorData, setEditorData] = useState(createEmptyEditorContent())
+  const [editorOwner, setEditorOwner] = useState<{ mode: 'doc' | 'template'; id: number | null } | null>(null)
   const [editorHtml, setEditorHtml] = useState('')
   const [editorMenuOpen, setEditorMenuOpen] = useState(false)
   const [findReplaceOpen, setFindReplaceOpen] = useState(false)
@@ -167,6 +168,7 @@ function App() {
       return
     }
     setEditorData(activeDoc.content || createEmptyEditorContent())
+    setEditorOwner({ mode: 'doc', id: activeDoc.id })
     setEditorHtml('')
     setTitleDraft(activeDoc.title)
   }, [activeDoc, viewMode])
@@ -179,6 +181,7 @@ function App() {
       return
     }
     setEditorData(activeTemplate.content || createEmptyEditorContent())
+    setEditorOwner({ mode: 'template', id: activeTemplate.id })
     setEditorHtml('')
     setTitleDraft(activeTemplate.name)
   }, [activeTemplate, viewMode])
@@ -304,18 +307,39 @@ function App() {
   }
 
   const handlePrint = async () => {
-    if (!activeDoc) return
-    const content = editorHtml.trim() ? editorHtml : renderEditorHtml(editorData)
-    await window.api.print({ title: activeDoc.title, content })
+    const current = viewMode === 'template' ? activeTemplate : activeDoc
+    if (!current) return
+    const source =
+      editorOwner?.mode === viewMode && editorOwner?.id === (viewMode === 'template' ? activeTemplate?.id : activeDoc?.id)
+        ? editorData
+        : viewMode === 'template'
+          ? (activeTemplate?.content ?? createEmptyEditorContent())
+          : (activeDoc?.content ?? createEmptyEditorContent())
+    const content = renderEditorHtml(source)
+    if (viewMode === 'template') {
+      const title = activeTemplate!.name
+      await window.api.print({ title, content })
+      return
+    }
+    const title = activeDoc!.title
+    await window.api.print({ title, content })
   }
 
   const handleExport = async (format: 'pdf' | 'word' | 'html') => {
-    if (!activeDoc) return
-    const content = editorHtml.trim() ? editorHtml : renderEditorHtml(editorData)
+    const current = viewMode === 'template' ? activeTemplate : activeDoc
+    if (!current) return
+    const source =
+      editorOwner?.mode === viewMode && editorOwner?.id === (viewMode === 'template' ? activeTemplate?.id : activeDoc?.id)
+        ? editorData
+        : viewMode === 'template'
+          ? (activeTemplate?.content ?? createEmptyEditorContent())
+          : (activeDoc?.content ?? createEmptyEditorContent())
+    const content = renderEditorHtml(source)
+    const title = 'name' in current ? current.name : current.title
     const res = await window.api.exportDoc({
-      title: activeDoc.title,
+      title,
       content,
-        format,
+      format,
     })
     if (!res) {
       openDialog({
