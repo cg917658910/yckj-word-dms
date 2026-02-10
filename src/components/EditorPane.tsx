@@ -56,6 +56,7 @@ const EditorPane = ({
   const lastValueRef = useRef<string>('')
   const scrollLockRef = useRef(false)
   const lastScrollRef = useRef({ top: 0, left: 0 })
+  const preInputScrollRef = useRef<{ top: number; left: number; pageNo: number | null } | null>(null)
   const [tablePickerOpen, setTablePickerOpen] = useState(false)
   const [tableHover, setTableHover] = useState({ rows: 0, cols: 0 })
   const savedRangeRef = useRef<any | null>(null)
@@ -151,6 +152,27 @@ const EditorPane = ({
           cmd.executeSetPositionContext(range)
         }
       }
+      const target = scrollRef.current
+      const snapshot = preInputScrollRef.current
+      if (target && snapshot) {
+        const ctx = (cmd as any).getRangeContext?.()
+        const currentPage = typeof ctx?.startPageNo === 'number' ? ctx.startPageNo : null
+        if (currentPage === snapshot.pageNo) {
+          scrollLockRef.current = true
+          lastScrollRef.current = { top: snapshot.top, left: snapshot.left }
+          target.scrollTop = snapshot.top
+          target.scrollLeft = snapshot.left
+          requestAnimationFrame(() => {
+            if (!scrollRef.current) return
+            scrollRef.current.scrollTop = lastScrollRef.current.top
+            scrollRef.current.scrollLeft = lastScrollRef.current.left
+            window.setTimeout(() => {
+              scrollLockRef.current = false
+            }, 120)
+          })
+        }
+        preInputScrollRef.current = null
+      }
     }
   }
   const exportDocx = (name: string) =>
@@ -181,6 +203,16 @@ const EditorPane = ({
 
   const handleToolbarMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement
+    const container = scrollRef.current
+    if (container && editorRef.current) {
+      const ctx = (editorRef.current.command as any).getRangeContext?.()
+      preInputScrollRef.current = {
+        top: container.scrollTop,
+        left: container.scrollLeft,
+        pageNo: typeof ctx?.startPageNo === 'number' ? ctx.startPageNo : null,
+      }
+      preserveScroll()
+    }
     if (target.closest('button')) {
       captureRange()
       event.preventDefault()
@@ -216,6 +248,7 @@ const EditorPane = ({
     const instance = new Editor(container, data as any, {
       header: { disabled:true },
       footer: { disabled:true },
+      scrollContainerSelector: '.editor-canvas',
     })
     instance.use(docxPlugin)
     //instance.use(floatingToolbarPlugin)
@@ -266,7 +299,20 @@ const EditorPane = ({
     savedRangeRef.current = null
     lastValueRef.current = value
 
-    const handleChange = scheduleSave
+    const handleChange = () => {
+      const target = scrollRef.current
+      if (target && preInputScrollRef.current) {
+        const ctx = (instance.command as any).getRangeContext?.()
+        const currentPage = typeof ctx?.startPageNo === 'number' ? ctx.startPageNo : null
+        const { top, left, pageNo } = preInputScrollRef.current
+        if (currentPage === pageNo) {
+          target.scrollTop = top
+          target.scrollLeft = left
+        }
+        preInputScrollRef.current = null
+      }
+      scheduleSave()
+    }
     const handlePositionChange = () => {
       captureRange()
     }
@@ -275,16 +321,29 @@ const EditorPane = ({
     }
     instance.eventBus.on('contentChange', handleChange)
     instance.eventBus.on('positionContextChange', handlePositionChange)
-    instance.eventBus.on('positionContextChange', handlePositionChange)
 
     if (onHtmlChange) {
       onHtmlChange(getHtml(instance))
     }
 
+    const handleKeydown = (event: KeyboardEvent) => {
+      const container = scrollRef.current
+      if (!container) return
+      const active = document.activeElement
+      if (active && !container.contains(active)) return
+      const ctx = (instance.command as any).getRangeContext?.()
+      preInputScrollRef.current = {
+        top: container.scrollTop,
+        left: container.scrollLeft,
+        pageNo: typeof ctx?.startPageNo === 'number' ? ctx.startPageNo : null,
+      }
+    }
+    window.addEventListener('keydown', handleKeydown, true)
+
     return () => {
       instance.eventBus.off?.('contentChange', handleChange)
       instance.eventBus.off?.('positionContextChange', handlePositionChange)
-      instance.eventBus.off?.('positionContextChange', handlePositionChange)
+      window.removeEventListener('keydown', handleKeydown, true)
       instance.destroy()
       if (editorRef.current === instance) {
         editorRef.current = null
