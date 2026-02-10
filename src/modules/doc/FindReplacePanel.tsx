@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+﻿import type { ReactNode } from 'react'
 import type { DocSummary } from '../../types'
 
 type Props = {
@@ -52,7 +52,11 @@ const FindReplacePanel = ({
           </label>
           <label className='panel-field'>
             <span>替换为</span>
-            <input value={replaceQuery} onChange={(event) => setReplaceQuery(event.target.value)} />
+            <input
+              value={replaceQuery}
+              onChange={(event) => setReplaceQuery(event.target.value)}
+              placeholder='替换为'
+            />
           </label>
           <div className='panel-hint'>范围：当前文件夹（全部文档时为全库）</div>
           {findCommitQuery.trim() ? (

@@ -131,6 +131,30 @@ const buildExportHtml = async (payload: { title: string; content: string }) => {
 </html>`
 }
 
+const buildImagePdfHtml = (images: string[]) => {
+  const pages = images
+    .map((img) => {
+      const src = img.startsWith('data:') ? img : `data:image/png;base64,${img}`
+      return `<div class="page"><img src="${src}" /></div>`
+    })
+    .join('\n')
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    @page { size: A4; margin: 0; }
+    html, body { margin: 0; padding: 0; }
+    .page { page-break-after: always; }
+    img { width: 100%; height: auto; display: block; }
+  </style>
+</head>
+<body>
+${pages}
+</body>
+</html>`
+}
+
 export function registerExportIpc() {
   ipcMain.handle('doc:print', async (_event, payload: { title: string; content: string }) => {
     const html = await buildExportHtml(payload)
@@ -149,6 +173,42 @@ export function registerExportIpc() {
         resolve(success)
       })
     })
+  })
+
+  ipcMain.handle('doc:export-pdf-images', async (_event, payload: { title: string; images: string[] }) => {
+    if (!payload.images || payload.images.length === 0) return false
+    const safeName = (value: string) => {
+      const cleaned = value.replace(/[\\/:*?"<>|]+/g, '_').trim()
+      return cleaned || '未命名'
+    }
+    const filename = safeName(payload.title)
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: '导出 PDF',
+      defaultPath: `${filename}.pdf`,
+      filters: [{ name: 'PDF 文件', extensions: ['pdf'] }],
+    })
+    if (canceled || !filePath) return false
+    const finalPath = await ensureUniquePath(filePath)
+    const html = buildImagePdfHtml(payload.images)
+    const fs = await import('node:fs/promises')
+    const tmpPath = path.join(app.getPath('temp'), `word-tool-export-images-${Date.now()}.html`)
+    await fs.writeFile(tmpPath, html, 'utf8')
+    const exportWin = new BrowserWindow({
+      show: false,
+      webPreferences: { sandbox: true },
+    })
+    await exportWin.loadFile(tmpPath)
+    const data = await exportWin.webContents.printToPDF({
+      printBackground: true,
+      pageSize: 'A4',
+      preferCSSPageSize: true,
+      displayHeaderFooter: false,
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+    })
+    await fs.writeFile(finalPath, data)
+    exportWin.destroy()
+    try { await fs.unlink(tmpPath) } catch {}
+    return true
   })
 
   ipcMain.handle('doc:export', async (_event, payload: { title: string; content: string; format: 'pdf' | 'word' | 'html' }) => {

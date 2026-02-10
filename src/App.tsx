@@ -39,6 +39,8 @@ function App() {
   const [viewMode, setViewMode] = useState<'doc' | 'template'>('doc')
   const [movePanel, setMovePanel] = useState<{ mode: 'doc' | 'template'; itemId: number } | null>(null)
   const [moveTargetId, setMoveTargetId] = useState<number | null>(null)
+  const [printRequestToken, setPrintRequestToken] = useState(0)
+  const [pdfExportToken, setPdfExportToken] = useState(0)
 
   const openDialog = (state: DialogState) => {
     setDialog(state)
@@ -328,6 +330,10 @@ function App() {
   const handleExport = async (format: 'pdf' | 'word' | 'html') => {
     const current = viewMode === 'template' ? activeTemplate : activeDoc
     if (!current) return
+    if (format === 'pdf') {
+      setPdfExportToken(Date.now())
+      return
+    }
     const source =
       editorOwner?.mode === viewMode && editorOwner?.id === (viewMode === 'template' ? activeTemplate?.id : activeDoc?.id)
         ? editorData
@@ -563,6 +569,9 @@ function App() {
           value={editorData}
           onChange={setEditorData}
           onHtmlChange={setEditorHtml}
+          printRequestToken={printRequestToken}
+          onOpenFindReplace={() => setFindReplaceOpen(true)}
+          pdfExportToken={pdfExportToken}
         />
 
       {dialog ? (

@@ -41,6 +41,7 @@ interface Window {
   api: {
     print: (payload: { title: string; content: string }) => Promise<boolean>
     exportDoc: (payload: { title: string; content: string; format: 'pdf' | 'word' | 'html' }) => Promise<boolean>
+    exportPdfImages: (payload: { title: string; images: string[] }) => Promise<boolean>
     importTemplates: () => Promise<boolean>
     uploadTemplateFiles: (folderId?: number | null) => Promise<boolean>
     uploadTemplateFolder: (folderId?: number | null) => Promise<boolean>

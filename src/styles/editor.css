@@ -58,6 +58,34 @@
   flex-wrap: wrap;
 }
 
+.editor-find {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(226, 232, 240, 0.8);
+  background: #ffffff;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.editor-find .find-input {
+  height: 30px;
+  min-width: 160px;
+  padding: 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.editor-find .find-count {
+  font-size: 12px;
+  color: #64748b;
+  min-width: 48px;
+  text-align: center;
+}
+
 .tool.icon {
   width: 28px;
   height: 28px;

@@ -1,4 +1,4 @@
-﻿import Editor, { ElementType, RowFlex, TitleLevel } from '@hufe921/canvas-editor'
+﻿import Editor, { EditorMode, ElementType, RowFlex, TitleLevel } from '@hufe921/canvas-editor'
 import docxPlugin from '@hufe921/canvas-editor-plugin-docx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DocDetail, TemplateRow } from '../types'
@@ -18,12 +18,15 @@ type Props = {
   onPrint: () => void
   onDeleteDoc: () => void
   onDeleteTemplate: () => void
+  onOpenFindReplace?: () => void
   activeDoc: DocDetail | null
   activeTemplate: TemplateRow | null
   formatDate: (value: string) => string
   value: string
   onChange: (value: string) => void
   onHtmlChange?: (value: string) => void
+  printRequestToken?: number
+  pdfExportToken?: number
 }
 
 const EditorPane = ({
@@ -40,12 +43,15 @@ const EditorPane = ({
   onPrint,
   onDeleteDoc,
   onDeleteTemplate,
+  onOpenFindReplace,
   activeDoc,
   activeTemplate,
   formatDate,
   value,
   onChange,
   onHtmlChange,
+  printRequestToken,
+  pdfExportToken,
 }: Props) => {
   const hasContent = viewMode === 'doc' ? !!activeDoc : !!activeTemplate
   const editorKey = viewMode === 'doc' ? activeDoc?.id ?? null : activeTemplate?.id ?? null
@@ -63,6 +69,11 @@ const EditorPane = ({
   const [tablePickerOpen, setTablePickerOpen] = useState(false)
   const [tableHover, setTableHover] = useState({ rows: 0, cols: 0 })
   const savedRangeRef = useRef<any | null>(null)
+  const [findOpen, setFindOpen] = useState(false)
+  const [findText, setFindText] = useState('')
+  const [replaceText, setReplaceText] = useState('')
+  const [searchInfo, setSearchInfo] = useState<{ index: number; count: number } | null>(null)
+  const lastPdfTokenRef = useRef<number | null>(null)
 
   const getHtml = (instance: Editor) => {
     if (typeof instance.command.getHTML !== 'function') return ''
@@ -226,6 +237,46 @@ const EditorPane = ({
     }
   }
 
+  const updateSearchInfo = () => {
+    const instance = editorRef.current
+    if (!instance) {
+      setSearchInfo(null)
+      return
+    }
+    const info = instance.command.getSearchNavigateInfo?.()
+    if (!info || typeof info.count !== 'number') {
+      setSearchInfo(null)
+      return
+    }
+    setSearchInfo({ index: info.index, count: info.count })
+  }
+
+  const runSearch = () => {
+    if (!editorRef.current) return
+    const keyword = findText.trim()
+    run((cmd) => cmd.executeSearch(keyword ? keyword : null, { isIgnoreCase: true }), {
+      preserveSelection: false,
+      ensureFocus: true,
+    })
+    window.setTimeout(() => updateSearchInfo(), 0)
+  }
+
+  const runReplaceCurrent = () => {
+    if (!findText.trim()) return
+    const index = typeof searchInfo?.index === 'number' ? searchInfo.index : undefined
+    run((cmd) => cmd.executeReplace(replaceText, index !== undefined ? { index } : undefined), {
+      preserveSelection: false,
+      ensureFocus: true,
+    })
+    window.setTimeout(() => updateSearchInfo(), 0)
+  }
+
+  const runReplaceAll = () => {
+    if (!findText.trim()) return
+    run((cmd) => cmd.executeReplace(replaceText), { preserveSelection: false, ensureFocus: true })
+    window.setTimeout(() => updateSearchInfo(), 0)
+  }
+
   const handleScroll = () => {
     const target = scrollRef.current
     if (!target) return
@@ -265,49 +316,68 @@ const EditorPane = ({
     })
     instance.use(docxPlugin)
     //instance.use(floatingToolbarPlugin)
-    const docxFileInput = document.querySelector<HTMLInputElement>('#file-docx');
+    const docxFileInput = document.querySelector<HTMLInputElement>('#file-docx')
+    const htmlFileInput = document.querySelector<HTMLInputElement>('#file-html')
+
     instance.register.contextMenuList([
       {
-        name: "导入Word",
-        when: (payload) => true,
-        callback: (command) => {
-          docxFileInput?.click();
+        name: '导入Word',
+        when: () => true,
+        callback: () => {
+          if (docxFileInput) docxFileInput.value = ''
+          docxFileInput?.click()
         },
       },
       {
-        name: "导出为PDF",
-        when: (payload) => true,
-        callback: (command) => {
-          onExport('pdf') 
+        name: '导出为PDF',
+        when: () => true,
+        callback: () => {
+          onExport('pdf')
         },
       },
       {
-        name: "导出为Word",
-        when: (payload) => true,
+        name: '导出为Word',
+        when: () => true,
         callback: (command) => {
-          (command as any).executeExportDocx({
+          ;(command as any).executeExportDocx({
             fileName: titleDraft || '文档',
-          });
+          })
         },
       },
     ])
+
     if (docxFileInput) {
-    docxFileInput.onchange = () => {
-      const file = docxFileInput?.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-          const buffer = event?.target?.result;
+      docxFileInput.onchange = () => {
+        const file = docxFileInput?.files?.[0]
+        if (!file) return
+        const reader = new FileReader()
+        reader.onload = (event) => {
+          const buffer = event?.target?.result
           if (buffer instanceof ArrayBuffer) {
-            (instance.command as any).executeImportDocx({
+            ;(instance.command as any).executeImportDocx({
               arrayBuffer: buffer,
-            });
+            })
           }
-          docxFileInput.value = "";
-        };
-      reader.readAsArrayBuffer(file);
-    };
-  }
+          docxFileInput.value = ''
+        }
+        reader.readAsArrayBuffer(file)
+      }
+    }
+    if (htmlFileInput) {
+      htmlFileInput.onchange = async () => {
+        const file = htmlFileInput?.files?.[0]
+        if (!file) return
+        const text = await file.text()
+        const data = parseEditorData(text)
+        editorRef.current?.command.executeSetValue(data as any)
+        const nextValue = serializeEditorData(data)
+        lastValueRef.current = nextValue
+        onChange(nextValue)
+        if (onHtmlChange && editorRef.current) {
+          onHtmlChange(getHtml(editorRef.current))
+        }
+      }
+    }
     editorRef.current = instance
     savedRangeRef.current = null
     lastValueRef.current = value
@@ -379,6 +449,28 @@ const EditorPane = ({
     }
   }, [value, hasContent])
 
+  useEffect(() => {
+    if (!hasContent) return
+    if (!editorRef.current) return
+    if (!pdfExportToken) return
+    if (lastPdfTokenRef.current === pdfExportToken) return
+    lastPdfTokenRef.current = pdfExportToken
+    const instance = editorRef.current
+    const title = titleDraft || '文档'
+    const exportPdf = async () => {
+      const images = await instance.command.getImage({ mode: EditorMode.PRINT, pixelRatio: 2 })
+      await window.api.exportPdfImages({ title, images })
+    }
+    exportPdf()
+  }, [pdfExportToken, hasContent, titleDraft])
+
+  useEffect(() => {
+    if (!hasContent) return
+    if (!editorRef.current) return
+    if (!printRequestToken) return
+    run((cmd) => cmd.executePrint(), { preserveSelection: false, ensureFocus: true })
+  }, [printRequestToken, hasContent])
+
   // value changes are driven by editor events, avoid re-initializing on every update
 
   return (
@@ -391,6 +483,7 @@ const EditorPane = ({
           <button className='tool' onClick={() => run((cmd) => cmd.executeRedo())} title='重做'>
             Redo
           </button>
+         
           <span className='tool-divider' />
           <select
             className='tool-select'
@@ -484,7 +577,81 @@ const EditorPane = ({
           <button className='tool' onClick={() => run((cmd) => cmd.executePrint(), { preserveSelection: false, ensureFocus: true })} title='打印'>
             打印
           </button>
+          <button
+            className='tool'
+            onClick={() => {
+              setFindOpen((prev) => {
+                if (prev) {
+                  run((cmd) => cmd.executeSearch(null), { preserveSelection: false })
+                  setSearchInfo(null)
+                }
+                return !prev
+              })
+            }}
+            title='查找替换'
+          >
+            查找替换
+          </button>
         </div>
+        {findOpen ? (
+          <div className='editor-find' onMouseDown={handleToolbarMouseDown}>
+            <input
+              className='find-input'
+              value={findText}
+              onChange={(event) => setFindText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') runSearch()
+              }}
+              placeholder='查找内容'
+            />
+            <button className='tool small' onClick={runSearch}>
+              查找
+            </button>
+            <span className='find-count'>
+              {searchInfo ? `${Math.min(searchInfo.index + 1, searchInfo.count)}/${searchInfo.count}` : '0/0'}
+            </span>
+            <button
+              className='tool small'
+              onClick={() => {
+                run((cmd) => cmd.executeSearchNavigatePre(), { preserveSelection: false, ensureFocus: true })
+                updateSearchInfo()
+              }}
+            >
+              上一个
+            </button>
+            <button
+              className='tool small'
+              onClick={() => {
+                run((cmd) => cmd.executeSearchNavigateNext(), { preserveSelection: false, ensureFocus: true })
+                updateSearchInfo()
+              }}
+            >
+              下一个
+            </button>
+            <input
+              className='find-input'
+              value={replaceText}
+              onChange={(event) => setReplaceText(event.target.value)}
+              placeholder='替换为'
+            />
+            <button className='tool small' onClick={runReplaceCurrent}>
+              替换
+            </button>
+            <button className='tool small' onClick={runReplaceAll}>
+              全部替换
+            </button>
+            <button
+              className='tool small ghost'
+              onClick={() => {
+                setFindOpen(false)
+                run((cmd) => cmd.executeSearch(null), { preserveSelection: false })
+                setSearchInfo(null)
+              }}
+            >
+              关闭
+            </button>
+          </div>
+        ) : null}
        {/*  <div className='editor-title-bar'>
           <div className='editor-title-left'>
             <input
@@ -603,6 +770,7 @@ const EditorPane = ({
           <div onMouseDown={preserveScroll}>
             <div className='canvas-editor' ref={containerRef} onMouseDown={preserveScroll} />
             <input type="file" name="file-docx" style={{ display: 'none' }} id="file-docx" accept=".docx" />
+            <input type="file" name="file-html" style={{ display: 'none' }} id="file-html" accept=".html,.htm" />
           </div>
         )}
       </div>
@@ -611,3 +779,4 @@ const EditorPane = ({
 }
 
 export default EditorPane
+
