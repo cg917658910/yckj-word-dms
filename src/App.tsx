@@ -198,7 +198,7 @@ function App() {
         content,
       })
       setActiveDoc(next)
-      if (next) {
+        if (next) {
           const nextDocs = docs.map((doc) =>
             doc.id === next.id
               ? {
@@ -209,44 +209,51 @@ function App() {
                 }
               : doc
           )
-        syncTreeWithDocs(nextDocs)
+          syncTreeWithDocs(nextDocs)
+        }
+        openDialog({
+          title: '已保存',
+          message: '文档已保存。',
+          confirmText: '知道了',
+          onConfirm: () => {},
+        })
+        return
       }
-      return
-    }
-    if (viewMode === 'template') {
-      if (!activeTemplate) return
+      if (viewMode === 'template') {
+        if (!activeTemplate) return
       const next = {
         ...activeTemplate,
         name: titleDraft.trim() || activeTemplate.name,
         content: editorData || createEmptyEditorContent(),
       }
-      await window.api.db.updateTemplate({
-        id: activeTemplate.id,
-        name: next.name,
-        content: next.content,
-        folderId: next.folderId ?? null,
-      })
-      setActiveTemplate(next)
-      const nextTemplates = templates.map((tpl) => (tpl.id === next.id ? { ...tpl, name: next.name, content: next.content, updatedAt: new Date().toISOString() } : tpl))
-      syncTreeWithTemplates(nextTemplates)
+        await window.api.db.updateTemplate({
+          id: activeTemplate.id,
+          name: next.name,
+          content: next.content,
+          folderId: next.folderId ?? null,
+        })
+        setActiveTemplate(next)
+        const nextTemplates = templates.map((tpl) => (tpl.id === next.id ? { ...tpl, name: next.name, content: next.content, updatedAt: new Date().toISOString() } : tpl))
+        syncTreeWithTemplates(nextTemplates)
+        openDialog({
+          title: '已保存',
+          message: '模板已保存。',
+          confirmText: '知道了',
+          onConfirm: () => {},
+        })
     }
   }
 
   useEffect(() => {
-    if (viewMode === 'doc' && activeDoc) {
-      const timer = setTimeout(() => {
+    const handleKeydown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault()
         handleSave()
-      }, 600)
-      return () => clearTimeout(timer)
+      }
     }
-    if (viewMode === 'template' && activeTemplate) {
-      const timer = setTimeout(() => {
-        handleSave()
-      }, 600)
-      return () => clearTimeout(timer)
-    }
-    return undefined
-  }, [editorData, titleDraft, viewMode, activeDoc, activeTemplate])
+    window.addEventListener('keydown', handleKeydown)
+    return () => window.removeEventListener('keydown', handleKeydown)
+  }, [handleSave])
 
   const handleTitleBlur = async () => {
     if (!titleDraft.trim()) {
@@ -561,6 +568,7 @@ function App() {
           onSaveAsTemplate={handleSaveAsTemplate}
           onExport={(format) => handleExport(format)}
           onPrint={handlePrint}
+          onSave={handleSave}
           onDeleteDoc={handleDeleteDoc}
           onDeleteTemplate={handleDeleteTemplate}
           activeDoc={activeDoc}

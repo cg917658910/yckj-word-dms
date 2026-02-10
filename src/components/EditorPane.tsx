@@ -16,6 +16,7 @@ type Props = {
   onSaveAsTemplate: () => void
   onExport: (format: 'pdf' | 'word' | 'html') => void
   onPrint: () => void
+  onSave?: () => void
   onDeleteDoc: () => void
   onDeleteTemplate: () => void
   onOpenFindReplace?: () => void
@@ -41,6 +42,7 @@ const EditorPane = ({
   onSaveAsTemplate,
   onExport,
   onPrint,
+  onSave,
   onDeleteDoc,
   onDeleteTemplate,
   onOpenFindReplace,
@@ -483,7 +485,10 @@ const EditorPane = ({
           <button className='tool' onClick={() => run((cmd) => cmd.executeRedo())} title='重做'>
             Redo
           </button>
-         
+          <button className='tool' onClick={() => onSave?.()} title='保存'>
+            保存
+          </button>
+          
           <span className='tool-divider' />
           <select
             className='tool-select'
@@ -779,4 +784,3 @@ const EditorPane = ({
 }
 
 export default EditorPane
-
