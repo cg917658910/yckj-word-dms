@@ -17,6 +17,7 @@ type Props = {
   onExport: (format: 'pdf' | 'word' | 'html') => void
   onPrint: () => void
   onSave?: () => void
+  isDirty?: boolean
   onDeleteDoc: () => void
   onDeleteTemplate: () => void
   onOpenFindReplace?: () => void
@@ -43,6 +44,7 @@ const EditorPane = ({
   onExport,
   onPrint,
   onSave,
+  isDirty,
   onDeleteDoc,
   onDeleteTemplate,
   onOpenFindReplace,
@@ -76,6 +78,7 @@ const EditorPane = ({
   const [replaceText, setReplaceText] = useState('')
   const [searchInfo, setSearchInfo] = useState<{ index: number; count: number } | null>(null)
   const lastPdfTokenRef = useRef<number | null>(null)
+  const [rangeStyle, setRangeStyle] = useState<{ font?: string; size?: number } | null>(null)
 
   const getHtml = (instance: Editor) => {
     if (typeof instance.command.getHTML !== 'function') return ''
@@ -404,11 +407,15 @@ const EditorPane = ({
     const handlePositionChange = () => {
       captureRange()
     }
+    const handleRangeStyle = (payload: { font?: string; size?: number }) => {
+      setRangeStyle(payload)
+    }
     if ((instance as { listener?: { contentChange?: () => void } }).listener) {
       ;(instance as { listener: { contentChange?: () => void } }).listener.contentChange = handleChange
     }
     instance.eventBus.on('contentChange', handleChange)
     instance.eventBus.on('positionContextChange', handlePositionChange)
+    instance.eventBus.on('rangeStyleChange', handleRangeStyle)
 
     if (onHtmlChange) {
       onHtmlChange(getHtml(instance))
@@ -431,6 +438,7 @@ const EditorPane = ({
     return () => {
       instance.eventBus.off?.('contentChange', handleChange)
       instance.eventBus.off?.('positionContextChange', handlePositionChange)
+      instance.eventBus.off?.('rangeStyleChange', handleRangeStyle)
       window.removeEventListener('keydown', handleKeydown, true)
       instance.destroy()
       if (editorRef.current === instance) {
@@ -477,6 +485,11 @@ const EditorPane = ({
 
   return (
     <section className='editor'>
+      {isDirty ? (
+        <div className='editor-unsaved'>● 未保存</div>
+      ) : (
+        <div className='editor-unsaved placeholder'> </div>
+      )}
       <div className='editor-toolbar'>
         <div className='editor-format' onMouseDown={handleToolbarMouseDown}>
           <button className='tool' onClick={() => run((cmd) => cmd.executeUndo())} title='撤销'>
@@ -488,7 +501,7 @@ const EditorPane = ({
           <button className='tool' onClick={() => onSave?.()} title='保存'>
             保存
           </button>
-          
+
           <span className='tool-divider' />
           <select
             className='tool-select'
@@ -510,17 +523,46 @@ const EditorPane = ({
           </select>
           <select
             className='tool-select'
-            defaultValue='14'
+            value={
+              rangeStyle?.font && ['微软雅黑', '宋体', '黑体', '仿宋', '楷体', 'Arial', 'Times New Roman'].includes(rangeStyle.font)
+                ? rangeStyle.font
+                : '微软雅黑'
+            }
+            onChange={(event) => {
+              const font = event.target.value
+              if (font) run((cmd) => cmd.executeFont(font), { range: savedRangeRef.current })
+            }}
+          >
+            {['微软雅黑', '宋体', '黑体', '仿宋', '楷体', 'Arial', 'Times New Roman'].map((font) => (
+              <option key={font} value={font}>
+                {font}
+              </option>
+            ))}
+          </select>
+          <select
+            className='tool-select'
+            value={(() => {
+              const base = [12, 14, 16, 18, 20, 22, 24, 28, 32]
+              const current = rangeStyle?.size
+              const list = current && !base.includes(current) ? [...base, current].sort((a, b) => a - b) : base
+              const value = current && list.includes(current) ? String(current) : '14'
+              return value
+            })()}
             onChange={(event) => {
               const size = Number(event.target.value)
               if (!Number.isNaN(size)) run((cmd) => cmd.executeSize(size), { range: savedRangeRef.current })
             }}
           >
-            {[12, 14, 16, 18, 20, 22, 24, 28, 32].map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
+            {(() => {
+              const base = [12, 14, 16, 18, 20, 22, 24, 28, 32]
+              const current = rangeStyle?.size
+              const list = current && !base.includes(current) ? [...base, current].sort((a, b) => a - b) : base
+              return list.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))
+            })()}
           </select>
           <select
             className='tool-select'

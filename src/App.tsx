@@ -1,5 +1,5 @@
-﻿import { useEffect, useMemo, useState } from 'react'
-import './App.css'
+﻿import './App.css'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import EditorPane from './components/EditorPane'
 import MovePanel from './components/MovePanel'
 import { useDocuments } from './hooks/useDocuments'
@@ -41,6 +41,8 @@ function App() {
   const [moveTargetId, setMoveTargetId] = useState<number | null>(null)
   const [printRequestToken, setPrintRequestToken] = useState(0)
   const [pdfExportToken, setPdfExportToken] = useState(0)
+  const [isDirty, setIsDirty] = useState(false)
+  const savedSnapshotRef = useRef<{ mode: 'doc' | 'template'; id: number | null; title: string; content: string } | null>(null)
 
   const openDialog = (state: DialogState) => {
     setDialog(state)
@@ -167,12 +169,21 @@ function App() {
     if (!activeDoc) {
       setEditorData(createEmptyEditorContent())
       setEditorHtml('')
+      setIsDirty(false)
+      savedSnapshotRef.current = null
       return
     }
     setEditorData(activeDoc.content || createEmptyEditorContent())
     setEditorOwner({ mode: 'doc', id: activeDoc.id })
     setEditorHtml('')
     setTitleDraft(activeDoc.title)
+    savedSnapshotRef.current = {
+      mode: 'doc',
+      id: activeDoc.id,
+      title: activeDoc.title,
+      content: activeDoc.content || createEmptyEditorContent(),
+    }
+    setIsDirty(false)
   }, [activeDoc, viewMode])
 
   useEffect(() => {
@@ -180,13 +191,36 @@ function App() {
     if (!activeTemplate) {
       setEditorData(createEmptyEditorContent())
       setEditorHtml('')
+      setIsDirty(false)
+      savedSnapshotRef.current = null
       return
     }
     setEditorData(activeTemplate.content || createEmptyEditorContent())
     setEditorOwner({ mode: 'template', id: activeTemplate.id })
     setEditorHtml('')
     setTitleDraft(activeTemplate.name)
+    savedSnapshotRef.current = {
+      mode: 'template',
+      id: activeTemplate.id,
+      title: activeTemplate.name,
+      content: activeTemplate.content || createEmptyEditorContent(),
+    }
+    setIsDirty(false)
   }, [activeTemplate, viewMode])
+
+  useEffect(() => {
+    const current = viewMode === 'template' ? activeTemplate : activeDoc
+    if (!current) {
+      setIsDirty(false)
+      return
+    }
+    const saved = savedSnapshotRef.current
+    if (!saved || saved.mode !== viewMode || saved.id !== current.id) return
+    const currentTitle = titleDraft
+    const currentContent = editorData
+    const dirty = currentTitle !== saved.title || currentContent !== saved.content
+    setIsDirty(dirty)
+  }, [editorData, titleDraft, viewMode, activeDoc, activeTemplate])
 
   const handleSave = async () => {
     if (viewMode === 'doc') {
@@ -198,7 +232,7 @@ function App() {
         content,
       })
       setActiveDoc(next)
-        if (next) {
+      if (next) {
           const nextDocs = docs.map((doc) =>
             doc.id === next.id
               ? {
@@ -209,38 +243,42 @@ function App() {
                 }
               : doc
           )
-          syncTreeWithDocs(nextDocs)
-        }
-        openDialog({
-          title: '已保存',
-          message: '文档已保存。',
-          confirmText: '知道了',
-          onConfirm: () => {},
-        })
-        return
+        syncTreeWithDocs(nextDocs)
       }
-      if (viewMode === 'template') {
-        if (!activeTemplate) return
+      if (next) {
+        savedSnapshotRef.current = {
+          mode: 'doc',
+          id: next.id,
+          title: next.title,
+          content: content,
+        }
+        setIsDirty(false)
+      }
+      return
+    }
+    if (viewMode === 'template') {
+      if (!activeTemplate) return
       const next = {
         ...activeTemplate,
         name: titleDraft.trim() || activeTemplate.name,
         content: editorData || createEmptyEditorContent(),
       }
-        await window.api.db.updateTemplate({
-          id: activeTemplate.id,
-          name: next.name,
-          content: next.content,
-          folderId: next.folderId ?? null,
-        })
-        setActiveTemplate(next)
-        const nextTemplates = templates.map((tpl) => (tpl.id === next.id ? { ...tpl, name: next.name, content: next.content, updatedAt: new Date().toISOString() } : tpl))
-        syncTreeWithTemplates(nextTemplates)
-        openDialog({
-          title: '已保存',
-          message: '模板已保存。',
-          confirmText: '知道了',
-          onConfirm: () => {},
-        })
+      await window.api.db.updateTemplate({
+        id: activeTemplate.id,
+        name: next.name,
+        content: next.content,
+        folderId: next.folderId ?? null,
+      })
+      setActiveTemplate(next)
+      const nextTemplates = templates.map((tpl) => (tpl.id === next.id ? { ...tpl, name: next.name, content: next.content, updatedAt: new Date().toISOString() } : tpl))
+      syncTreeWithTemplates(nextTemplates)
+      savedSnapshotRef.current = {
+        mode: 'template',
+        id: next.id,
+        title: next.name,
+        content: next.content,
+      }
+      setIsDirty(false)
     }
   }
 
@@ -580,6 +618,7 @@ function App() {
           printRequestToken={printRequestToken}
           onOpenFindReplace={() => setFindReplaceOpen(true)}
           pdfExportToken={pdfExportToken}
+          isDirty={isDirty}
         />
 
       {dialog ? (
@@ -745,6 +784,7 @@ function App() {
 }
 
 export default App
+
 
 
 
