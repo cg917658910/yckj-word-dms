@@ -57,6 +57,9 @@ const EditorPane = ({
   const scrollLockRef = useRef(false)
   const lastScrollRef = useRef({ top: 0, left: 0 })
   const preInputScrollRef = useRef<{ top: number; left: number; pageNo: number | null } | null>(null)
+  const allowScrollUntilRef = useRef(0)
+  const allowAutoScrollUntilRef = useRef(0)
+  const lastPageNoRef = useRef<number | null>(null)
   const [tablePickerOpen, setTablePickerOpen] = useState(false)
   const [tableHover, setTableHover] = useState({ rows: 0, cols: 0 })
   const savedRangeRef = useRef<any | null>(null)
@@ -168,7 +171,7 @@ const EditorPane = ({
             scrollRef.current.scrollLeft = lastScrollRef.current.left
             window.setTimeout(() => {
               scrollLockRef.current = false
-            }, 120)
+            }, 300)
           })
         }
         preInputScrollRef.current = null
@@ -190,7 +193,7 @@ const EditorPane = ({
       scrollRef.current.scrollLeft = lastScrollRef.current.left
       window.setTimeout(() => {
         scrollLockRef.current = false
-      }, 120)
+      }, 300)
     })
   }
 
@@ -226,12 +229,22 @@ const EditorPane = ({
   const handleScroll = () => {
     const target = scrollRef.current
     if (!target) return
+    const now = Date.now()
     if (scrollLockRef.current) {
       target.scrollTop = lastScrollRef.current.top
       target.scrollLeft = lastScrollRef.current.left
       return
     }
-    lastScrollRef.current = { top: target.scrollTop, left: target.scrollLeft }
+    if (now < allowScrollUntilRef.current || now < allowAutoScrollUntilRef.current) {
+      lastScrollRef.current = { top: target.scrollTop, left: target.scrollLeft }
+      return
+    }
+    target.scrollTop = lastScrollRef.current.top
+    target.scrollLeft = lastScrollRef.current.left
+  }
+
+  const handleWheel = () => {
+    allowScrollUntilRef.current = Date.now() + 400
   }
 
   useEffect(() => {
@@ -308,6 +321,9 @@ const EditorPane = ({
         if (currentPage === pageNo) {
           target.scrollTop = top
           target.scrollLeft = left
+        } else if (currentPage !== null && currentPage !== lastPageNoRef.current) {
+          lastPageNoRef.current = currentPage
+          allowAutoScrollUntilRef.current = Date.now() + 400
         }
         preInputScrollRef.current = null
       }
@@ -572,7 +588,13 @@ const EditorPane = ({
         </div>
       ) : null}
 
-      <div className='editor-canvas' ref={scrollRef} onMouseDown={preserveScroll} onScroll={handleScroll}>
+      <div
+        className='editor-canvas'
+        ref={scrollRef}
+        onMouseDown={preserveScroll}
+        onScroll={handleScroll}
+        onWheel={handleWheel}
+      >
         {!hasContent ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
             <p style={{ color: '#94a3b8', fontSize: 15 }}>选择或创建文档开始编辑</p>
