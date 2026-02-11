@@ -146,6 +146,15 @@
   min-height: 0;
 }
 
+.onlyoffice-container {
+  width: 100%;
+  min-height: calc(100vh - 240px);
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
 .editor-paper {
   background: #fff;
   height: 100%;

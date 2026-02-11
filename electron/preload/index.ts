@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld('api', {
   openDoc: (payload: { filePath: string }) => ipcRenderer.invoke('doc:open', payload),
   revealDoc: (payload: { filePath: string }) => ipcRenderer.invoke('doc:reveal', payload),
   previewFile: (payload: { filePath: string }) => ipcRenderer.invoke('file:preview', payload),
+  onlyofficeGetConfig: (payload: { type: 'doc' | 'template'; id: number; title: string }) =>
+    ipcRenderer.invoke('onlyoffice:get-config', payload),
   uploadTemplateFiles: (folderId?: number | null) => ipcRenderer.invoke('template:upload-files', { folderId: folderId ?? null }),
   uploadTemplateFolder: (folderId?: number | null) => ipcRenderer.invoke('template:upload-folder', { folderId: folderId ?? null }),
   db: {

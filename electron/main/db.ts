@@ -548,6 +548,46 @@ async function getDocument(id: number): Promise<DocDetail | null> {
   }
 }
 
+export async function getDocumentById(id: number): Promise<DocDetail | null> {
+  return getDocument(id)
+}
+
+export async function getTemplateById(id: number): Promise<TemplateRow | null> {
+  const database = await ensureDb()
+  const row = get<TemplateRow>(
+    database,
+    'select id, name, content, file_path as filePath, updated_at as updatedAt, usage_count as usageCount, last_used_at as lastUsedAt, folder_id as folderId from templates where id = ?',
+    [id]
+  )
+  if (!row) return null
+  let size = 0
+  if (row.filePath && fs.existsSync(row.filePath)) {
+    try {
+      size = fs.statSync(row.filePath).size
+    } catch {
+      size = 0
+    }
+  }
+  return {
+    ...row,
+    size,
+  }
+}
+
+export async function touchDocument(id: number) {
+  const database = await ensureDb()
+  run(database, 'update documents set updated_at = datetime(\'now\') where id = ?', [id])
+  saveDb(database, getDbPath())
+  return true
+}
+
+export async function touchTemplate(id: number) {
+  const database = await ensureDb()
+  run(database, 'update templates set updated_at = datetime(\'now\') where id = ?', [id])
+  saveDb(database, getDbPath())
+  return true
+}
+
 async function saveDocument(input: { id: number; title: string; content: string }) {
   const database = await ensureDb()
   const doc = await getDocument(input.id)

@@ -42,6 +42,11 @@ type TemplateRow = {
 interface Window {
   // expose in the `electron/preload/index.ts`
   ipcRenderer: import('electron').IpcRenderer
+  DocsAPI?: {
+    DocEditor: new (elementId: string, config: unknown) => {
+      destroyEditor?: () => void
+    }
+  }
   api: {
     print: (payload: { title: string; content: string }) => Promise<boolean>
     exportDoc: (payload: { title: string; content: string; format: 'pdf' | 'word' | 'html' }) => Promise<boolean>
@@ -49,6 +54,21 @@ interface Window {
     revealDoc: (payload: { filePath: string }) => Promise<boolean>
     previewFile: (payload: { filePath: string }) => Promise<string>
     importTemplates: () => Promise<boolean>
+    onlyofficeGetConfig: (payload: { type: 'doc' | 'template'; id: number; title: string }) => Promise<{
+      scriptUrl: string
+      document: {
+        title: string
+        url: string
+        fileType: 'docx'
+        key: string
+      }
+      editorConfig: {
+        callbackUrl: string
+        mode: 'edit'
+        lang: 'zh-CN'
+        user: { id: string; name: string }
+      }
+    } | null>
     uploadTemplateFiles: (folderId?: number | null) => Promise<boolean>
     uploadTemplateFolder: (folderId?: number | null) => Promise<boolean>
     db: {
