@@ -26,6 +26,7 @@ type Props = {
   formatDate: (value: string) => string
   value: string
   onChange: (value: string) => void
+  onUserEdit?: () => void
   onHtmlChange?: (value: string) => void
   printRequestToken?: number
   pdfExportToken?: number
@@ -53,6 +54,7 @@ const EditorPane = ({
   formatDate,
   value,
   onChange,
+  onUserEdit,
   onHtmlChange,
   printRequestToken,
   pdfExportToken,
@@ -73,6 +75,7 @@ const EditorPane = ({
   const [tablePickerOpen, setTablePickerOpen] = useState(false)
   const [tableHover, setTableHover] = useState({ rows: 0, cols: 0 })
   const savedRangeRef = useRef<any | null>(null)
+  const userInteractedRef = useRef(false)
   const [findOpen, setFindOpen] = useState(false)
   const [findText, setFindText] = useState('')
   const [replaceText, setReplaceText] = useState('')
@@ -128,6 +131,7 @@ const EditorPane = ({
     options: { preserveSelection?: boolean; ensureFocus?: boolean; range?: any } = {}
   ) => {
     if (!editorRef.current) return
+    userInteractedRef.current = true
     const cmd = editorRef.current.command
     let preserve = options.preserveSelection !== false
     let range = preserve ? options.range ?? savedRangeRef.current ?? (cmd as any).getRange?.() : null
@@ -386,6 +390,7 @@ const EditorPane = ({
     editorRef.current = instance
     savedRangeRef.current = null
     lastValueRef.current = value
+    userInteractedRef.current = false
 
     const handleChange = () => {
       const target = scrollRef.current
@@ -401,6 +406,9 @@ const EditorPane = ({
           allowAutoScrollUntilRef.current = Date.now() + 400
         }
         preInputScrollRef.current = null
+      }
+      if (userInteractedRef.current) {
+        onUserEdit?.()
       }
       scheduleSave()
     }
@@ -426,6 +434,7 @@ const EditorPane = ({
       if (!container) return
       const active = document.activeElement
       if (active && !container.contains(active)) return
+      userInteractedRef.current = true
       const ctx = (instance.command as any).getRangeContext?.()
       preInputScrollRef.current = {
         top: container.scrollTop,

@@ -42,6 +42,7 @@ function App() {
   const [printRequestToken, setPrintRequestToken] = useState(0)
   const [pdfExportToken, setPdfExportToken] = useState(0)
   const [isDirty, setIsDirty] = useState(false)
+  const [dirtyTrackingEnabled, setDirtyTrackingEnabled] = useState(false)
   const savedSnapshotRef = useRef<{ mode: 'doc' | 'template'; id: number | null; title: string; content: string } | null>(null)
 
   const openDialog = (state: DialogState) => {
@@ -170,6 +171,7 @@ function App() {
       setEditorData(createEmptyEditorContent())
       setEditorHtml('')
       setIsDirty(false)
+      setDirtyTrackingEnabled(false)
       savedSnapshotRef.current = null
       return
     }
@@ -184,6 +186,7 @@ function App() {
       content: activeDoc.content || createEmptyEditorContent(),
     }
     setIsDirty(false)
+    setDirtyTrackingEnabled(false)
   }, [activeDoc, viewMode])
 
   useEffect(() => {
@@ -192,6 +195,7 @@ function App() {
       setEditorData(createEmptyEditorContent())
       setEditorHtml('')
       setIsDirty(false)
+      setDirtyTrackingEnabled(false)
       savedSnapshotRef.current = null
       return
     }
@@ -206,11 +210,16 @@ function App() {
       content: activeTemplate.content || createEmptyEditorContent(),
     }
     setIsDirty(false)
+    setDirtyTrackingEnabled(false)
   }, [activeTemplate, viewMode])
 
   useEffect(() => {
     const current = viewMode === 'template' ? activeTemplate : activeDoc
     if (!current) {
+      setIsDirty(false)
+      return
+    }
+    if (!dirtyTrackingEnabled) {
       setIsDirty(false)
       return
     }
@@ -220,7 +229,12 @@ function App() {
     const currentContent = editorData
     const dirty = currentTitle !== saved.title || currentContent !== saved.content
     setIsDirty(dirty)
-  }, [editorData, titleDraft, viewMode, activeDoc, activeTemplate])
+  }, [editorData, titleDraft, viewMode, activeDoc, activeTemplate, dirtyTrackingEnabled])
+
+  const handleTitleDraftChange = (value: string) => {
+    setTitleDraft(value)
+    setDirtyTrackingEnabled(true)
+  }
 
   const handleSave = async () => {
     if (viewMode === 'doc') {
@@ -253,6 +267,7 @@ function App() {
           content: content,
         }
         setIsDirty(false)
+        setDirtyTrackingEnabled(false)
       }
       return
     }
@@ -279,6 +294,7 @@ function App() {
         content: next.content,
       }
       setIsDirty(false)
+      setDirtyTrackingEnabled(false)
     }
   }
 
@@ -597,7 +613,7 @@ function App() {
         <EditorPane
           viewMode={viewMode}
           titleDraft={titleDraft}
-          onTitleChange={setTitleDraft}
+          onTitleChange={handleTitleDraftChange}
           onTitleBlur={handleTitleBlur}
           canEditTitle={viewMode === 'doc' ? !!activeDoc : !!activeTemplate}
           editorMenuOpen={editorMenuOpen}
@@ -614,6 +630,7 @@ function App() {
           formatDate={formatDate}
           value={editorData}
           onChange={setEditorData}
+          onUserEdit={() => setDirtyTrackingEnabled(true)}
           onHtmlChange={setEditorHtml}
           printRequestToken={printRequestToken}
           onOpenFindReplace={() => setFindReplaceOpen(true)}
