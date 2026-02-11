@@ -68,7 +68,6 @@ export const toDocSummary = (detail: DocDetail): DocSummary => {
     title: detail.title,
     snippet: text.slice(0, 120),
     updatedAt: detail.updatedAt,
-    createdAt: detail.createdAt,
     size: (detail.content || '').length,
   }
 }
@@ -81,7 +80,6 @@ export const toTemplateSummary = (template: TemplateRow): DocSummary => {
     title: template.name,
     snippet: text.slice(0, 120),
     updatedAt: template.updatedAt,
-    createdAt: template.updatedAt,
     size: (template.content || '').length,
   }
 }

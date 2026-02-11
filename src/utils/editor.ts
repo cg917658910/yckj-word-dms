@@ -85,7 +85,7 @@ export const extractEditorText = (raw: string) => {
 export const renderEditorHtml = (raw: string) => {
   const data = parseEditorData(raw)
   try {
-    const dom = createDomFromElementList(data.main ?? [])
+    const dom = createDomFromElementList((data.main as any) ?? [])
     return dom.innerHTML || ''
   } catch {
     return ''
