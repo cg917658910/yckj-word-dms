@@ -1,7 +1,7 @@
-﻿import http from 'node:http'
+﻿import { ipcMain } from 'electron'
 import fs from 'node:fs'
+import http from 'node:http'
 import path from 'node:path'
-import { ipcMain } from 'electron'
 import { getDocumentById, getTemplateById, touchDocument, touchTemplate } from './db'
 
 type TargetType = 'doc' | 'template'
@@ -9,8 +9,13 @@ type TargetType = 'doc' | 'template'
 let server: http.Server | null = null
 let port = 0
 let readyPromise: Promise<void> | null = null
+const BRIDGE_PORT = Number(process.env.ONLYOFFICE_BRIDGE_PORT || 59050)
 
 const baseUrl = () => `http://127.0.0.1:${port}`
+const DOC_SERVER_URL = (process.env.ONLYOFFICE_SERVER_URL || 'http://127.0.0.1:8443').replace(/\/$/, '')
+const normalizeHost = (value: string) => value.trim().replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '')
+const DOC_ACCESS_HOST = normalizeHost(process.env.ONLYOFFICE_DOC_ACCESS_HOST || 'host.docker.internal')
+const baseUrlForDocServer = () => `http://${DOC_ACCESS_HOST}:${port}`
 
 const parseTarget = (pathname: string) => {
   const parts = pathname.split('/').filter(Boolean)
@@ -123,6 +128,10 @@ const startServer = () => {
         return
       }
       const url = new URL(req.url, baseUrl())
+      if (url.pathname === '/onlyoffice/ping') {
+        sendJson(res, { ok: true, port })
+        return
+      }
       const target = parseTarget(url.pathname)
       if (!target) {
         res.writeHead(404, corsHeaders)
@@ -209,13 +218,31 @@ const startServer = () => {
     }
   })
   readyPromise = new Promise((resolve) => {
-    server?.listen(0, '127.0.0.1', () => {
-      const addr = server?.address()
-      if (typeof addr === 'object' && addr) {
-        port = addr.port
+    // Listen on all interfaces so Document Server container can reach host via host.docker.internal.
+    const bind = (targetPort: number) => {
+      if (!server) {
+        resolve()
+        return
       }
-      resolve()
-    })
+      const onError = (err: NodeJS.ErrnoException) => {
+        server?.off('error', onError)
+        if (err?.code === 'EADDRINUSE' && targetPort !== 0) {
+          bind(0)
+          return
+        }
+        resolve()
+      }
+      server.once('error', onError)
+      server.listen(targetPort, '0.0.0.0', () => {
+        server?.off('error', onError)
+        const addr = server?.address()
+        if (typeof addr === 'object' && addr) {
+          port = addr.port
+        }
+        resolve()
+      })
+    }
+    bind(BRIDGE_PORT)
   })
 }
 
@@ -231,27 +258,29 @@ export const registerOnlyOfficeIpc = () => {
       const stat = fs.statSync(record.filePath)
       const ext = normalizeWordExt(record.filePath)
       return {
-        scriptUrl: '/web-apps/apps/api/documents/api.js',
+        scriptUrl: `${DOC_SERVER_URL}/web-apps/apps/api/documents/api.js`,
         document: {
           title: payload.title,
-          url: `${baseUrl()}/onlyoffice/file/${payload.type}/${payload.id}/${encodeURIComponent(toSafeFileName(payload.title, ext))}`,
+          url: `${baseUrlForDocServer()}/onlyoffice/file/${payload.type}/${payload.id}/${encodeURIComponent(toSafeFileName(payload.title, ext))}`,
           fileType: ext.slice(1),
           key: `${payload.type}-${payload.id}-${stat.mtimeMs}`,
           permissions: {
             edit: true,
-            download: false,
-            print: false,
+            download: true,
+            print: true,
           },
         },
         editorConfig: {
-          callbackUrl: `${baseUrl()}/onlyoffice/callback/${payload.type}/${payload.id}`,
+          callbackUrl: `${baseUrlForDocServer()}/onlyoffice/callback/${payload.type}/${payload.id}`,
           mode: 'edit',
           lang: 'zh-CN',
           user: { id: 'local-user', name: 'local-user' },
           customization: {
             about: false,
             feedback: false,
+            spellcheck: false,
           },
+          forcesave: false,
         },
       }
     }

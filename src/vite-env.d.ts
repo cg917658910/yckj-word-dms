@@ -59,7 +59,7 @@ interface Window {
       document: {
         title: string
         url: string
-        fileType: 'docx'
+        fileType: string
         key: string
       }
       editorConfig: {

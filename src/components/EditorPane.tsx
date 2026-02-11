@@ -43,71 +43,19 @@ const loadScript = (src: string) => {
   return scriptCache[src]
 }
 
-const loadOnlyOfficeApi = async () => {
-  // Try relative first to align with ranuts/document behavior in SPA/base paths.
+const loadOnlyOfficeApi = async (scriptUrl: string) => {
   try {
-    await loadScript('./web-apps/apps/api/documents/api.js')
-    return
+    await loadScript(scriptUrl)
+    return { remote: true as const }
   } catch {
-    await loadScript('/web-apps/apps/api/documents/api.js')
-  }
-}
-
-let x2tInitPromise: Promise<any> | null = null
-const ensureX2t = async () => {
-  if (x2tInitPromise) return x2tInitPromise
-  x2tInitPromise = new Promise(async (resolve, reject) => {
+    // Fallback to bundled assets to keep editor available when DS is down.
     try {
-      await loadScript('/wasm/x2t/x2t.js')
-      const mod = (window as any).Module
-      if (!mod) {
-        reject(new Error('x2t module missing'))
-        return
-      }
-      if (mod.calledRun && mod.FS) {
-        resolve(mod)
-        return
-      }
-      mod.onRuntimeInitialized = () => {
-        try {
-          for (const dir of ['/working', '/working/media', '/working/fonts', '/working/themes']) {
-            try {
-              mod.FS.mkdir(dir)
-            } catch {
-              // ignore existing
-            }
-          }
-          resolve(mod)
-        } catch (e) {
-          reject(e)
-        }
-      }
-    } catch (e) {
-      reject(e)
+      await loadScript('/web-apps/apps/api/documents/api.js')
+      return { remote: false as const }
+    } catch {
+      throw new Error(`Failed to load script: ${scriptUrl}`)
     }
-  })
-  return x2tInitPromise
-}
-
-const convertDocxToBin = async (bytes: Uint8Array, fileName: string) => {
-  const x2t = await ensureX2t()
-  const safe = (fileName || 'document.docx').replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
-  const fromPath = `/working/${safe.endsWith('.docx') ? safe : `${safe}.docx`}`
-  const toPath = `${fromPath}.bin`
-  const paramsPath = '/working/params.xml'
-  const params = `<?xml version="1.0" encoding="utf-8"?>
-<TaskQueueDataConvert xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <m_sFileFrom>${fromPath}</m_sFileFrom>
-  <m_sThemeDir>/working/themes</m_sThemeDir>
-  <m_sFileTo>${toPath}</m_sFileTo>
-  <m_bIsNoBase64>false</m_bIsNoBase64>
-</TaskQueueDataConvert>`
-  x2t.FS.writeFile(fromPath, bytes)
-  x2t.FS.writeFile(paramsPath, params)
-  const code = x2t.ccall('main1', 'number', ['string'], [paramsPath])
-  if (code !== 0) throw new Error(`x2t convert failed: ${code}`)
-  const out = x2t.FS.readFile(toPath, { encoding: 'binary' })
-  return out instanceof Uint8Array ? out : new Uint8Array(out)
+  }
 }
 
 const EditorPane = ({
@@ -151,7 +99,6 @@ const EditorPane = ({
       setLoading(true)
       setError('')
       phaseRef.current = 'prepare'
-      let docBytes: Uint8Array | null = null
       try {
         if (editorRef.current?.destroyEditor) {
           editorRef.current.destroyEditor()
@@ -167,36 +114,37 @@ const EditorPane = ({
           setLoading(false)
           return
         }
-        // Preflight: if file endpoint returns HTML, OnlyOffice will hang on loading.
-        try {
-          const preflight = await fetch(cfg.document.url, { method: 'GET' })
-          const contentType = preflight.headers.get('content-type') || ''
-          if (!preflight.ok) {
-            setError(`文档读取失败: ${preflight.status}`)
-            setLoading(false)
-            return
-          }
-          if (contentType.toLowerCase().includes('text/html')) {
-            setError(`文档地址返回 HTML（非文档流）: ${cfg.document.url}`)
-            setLoading(false)
-            return
-          }
-          if ((cfg.document.fileType || '').toLowerCase() === 'docx') {
+        // Preflight from renderer only for local loopback URLs.
+        // When using host.docker.internal, the URL is intended for Document Server container.
+        const isDockerHostUrl = /:\/\/host\.docker\.internal(?::\d+)?\//i.test(cfg.document.url)
+        if (!isDockerHostUrl) {
+          try {
+            const preflight = await fetch(cfg.document.url, { method: 'GET' })
+            const contentType = preflight.headers.get('content-type') || ''
+            if (!preflight.ok) {
+              setError(`文档读取失败: ${preflight.status}`)
+              setLoading(false)
+              return
+            }
+            if (contentType.toLowerCase().includes('text/html')) {
+              setError(`文档地址返回 HTML（非文档流）: ${cfg.document.url}`)
+              setLoading(false)
+              return
+            }
             const bytes = new Uint8Array(await preflight.arrayBuffer())
             const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b
-            if (!isZip) {
+            if ((cfg.document.fileType || '').toLowerCase() === 'docx' && !isZip) {
               setError('文件扩展名为 docx，但内容不是有效 docx（缺少 PK 头）')
               setLoading(false)
               return
             }
-            docBytes = bytes
+          } catch (preflightError) {
+            setError(`文档地址不可访问: ${(preflightError as Error)?.message ?? 'unknown'}`)
+            setLoading(false)
+            return
           }
-        } catch (preflightError) {
-          setError(`文档地址不可访问: ${(preflightError as Error)?.message ?? 'unknown'}`)
-          setLoading(false)
-          return
         }
-        await loadOnlyOfficeApi()
+        const apiLoad = await loadOnlyOfficeApi(cfg.scriptUrl)
         phaseRef.current = 'api-loaded'
         if (disposed) return
         if (!window.DocsAPI?.DocEditor) {
@@ -212,24 +160,8 @@ const EditorPane = ({
           height: '100%',
           width: '100%',
           events: {
-            onAppReady: async () => {
+            onAppReady: () => {
               phaseRef.current = 'app-ready'
-              if ((cfg.document.fileType || '').toLowerCase() !== 'docx') return
-              try {
-                const bytes = docBytes ?? new Uint8Array(await (await fetch(cfg.document.url)).arrayBuffer())
-                phaseRef.current = 'converting'
-                const bin = await convertDocxToBin(bytes, cfg.document.title || 'document.docx')
-                phaseRef.current = 'opening-bin'
-                ;(window as any).editor = editorRef.current
-                ;(window as any).editor?.sendCommand?.({
-                  command: 'asc_openDocument',
-                  data: { buf: bin },
-                })
-              } catch (openErr) {
-                const msg = (openErr as Error)?.message ?? 'unknown'
-                setError(`文档转换/打开失败: ${msg}`)
-                setLoading(false)
-              }
             },
             onDocumentReady: () => {
               phaseRef.current = 'document-ready'
@@ -237,15 +169,12 @@ const EditorPane = ({
                 window.clearTimeout(watchdogTimer)
                 watchdogTimer = null
               }
-              try {
-                ;(editorRef.current as any)?.showMessage?.(
-                  '当前模式已禁用内置保存/打印，请使用右上角“使用本地 Word/WPS 打开”进行保存和打印。'
-                )
-              } catch {
-                // ignore
+              if (!apiLoad.remote) {
+                setError('Document Server 未启动：当前为本地降级模式，保存/打印不可用。请先启动 127.0.0.1:8443。')
+              } else {
+                setError('')
               }
               setLoading(false)
-              setError('')
             },
             onError: (event: any) => {
               phaseRef.current = 'error-event'

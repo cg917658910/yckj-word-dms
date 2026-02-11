@@ -104220,19 +104220,6 @@ var FONT_TYPE_RECENT = 4,
                   timeStyle: 'short',
                 });
               }
-              return (
-                e.getMonth() +
-                1 +
-                '/' +
-                e.getDate() +
-                '/' +
-                e.getFullYear() +
-                ' ' +
-                ((e = (i = e).getHours()),
-                (i = i.getMinutes()),
-                (t = 12 <= e ? 'pm' : 'am'),
-                (e = (e %= 12) || 12) + ':' + (i < 10 ? '0' + i : i) + ' ' + t)
-              );
             },
             getView: function (t) {
               return !t && this.view ? this.view : Backbone.Controller.prototype.getView.call(this, t);
@@ -108940,19 +108927,6 @@ var FONT_TYPE_RECENT = 4,
                   timeStyle: 'short',
                 });
               }
-              return (
-                e.getMonth() +
-                1 +
-                '/' +
-                e.getDate() +
-                '/' +
-                e.getFullYear() +
-                ' ' +
-                ((e = (i = e).getHours()),
-                (i = i.getMinutes()),
-                (t = 12 <= e ? 'pm' : 'am'),
-                (e = (e %= 12) || 12) + ':' + (i < 10 ? '0' + i : i) + ' ' + t)
-              );
             },
             onBtnPreviewClick: function (t, e) {
               switch (e) {
