@@ -22,17 +22,14 @@
     "docserver:logs": "docker logs -f onlyoffice-ds",
     "docserver:check": "powershell -Command \"try { $r=Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8443/healthcheck -TimeoutSec 5; Write-Output $r.Content } catch { Write-Output $_.Exception.Message; exit 1 }\"",
     "build": "cross-env NODE_ENV=production tsc && vite build && electron-builder",
+    "build:portable": "cross-env NODE_ENV=production tsc && vite build && electron-builder --win portable",
+    "build:nsis": "cross-env NODE_ENV=production tsc && vite build && electron-builder --win nsis",
     "preview": "cross-env NODE_ENV=production vite preview",
     "pretest": "vite build --mode=test",
     "test": "vitest run"
   },
   "dependencies": {
-    "@ckeditor/ckeditor5-react": "^11.0.1",
-    "ckeditor5": "^47.4.0",
-    "html-to-docx": "^1.8.0",
-    "iconv-lite": "^0.6.3",
     "mammoth": "^1.11.0",
-    "pdf-parse": "^2.4.5",
     "sql.js": "^1.10.2"
   },
   "devDependencies": {

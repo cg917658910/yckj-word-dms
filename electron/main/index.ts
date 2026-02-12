@@ -3,7 +3,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerDbIpc } from './db'
-import { registerExportIpc } from './export'
 import { toHtmlFromFile } from './import'
 import { registerOnlyOfficeIpc } from './onlyoffice'
 import { registerUploadIpc } from './upload'
@@ -72,7 +71,6 @@ async function createWindow() {
 
 app.whenReady().then(() => {
   registerDbIpc()
-  registerExportIpc()
   registerOnlyOfficeIpc()
   registerUploadIpc()
   createWindow()

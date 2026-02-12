@@ -6,8 +6,12 @@
     "output": "release/${version}"
   },
   "files": [
-    "dist-electron",
-    "dist"
+    "dist-electron/**",
+    "dist/**",
+    "!dist/web-apps{,/**}",
+    "!dist/fonts{,/**}",
+    "!dist/wasm{,/**}",
+    "!dist/sdkjs{,/**}"
   ],
   "mac": {
     "artifactName": "${productName}_${version}.${ext}",

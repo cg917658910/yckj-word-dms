@@ -21,10 +21,9 @@ export default defineConfig(({ command }) => {
       alias: {
         '@': path.join(__dirname, 'src')
       },
-      dedupe: ['ckeditor5'],
     },
     optimizeDeps: {
-      include: ['ckeditor5', 'es-toolkit', 'es-toolkit/compat/isEqual', 'fuzzysort', 'extend', 'debug'],
+      include: ['es-toolkit', 'es-toolkit/compat/isEqual', 'fuzzysort', 'extend', 'debug'],
     },
     plugins: [
       react(),

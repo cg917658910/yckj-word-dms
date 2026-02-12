@@ -25,7 +25,6 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 
 contextBridge.exposeInMainWorld('api', {
   print: (payload: { title: string; content: string }) => ipcRenderer.invoke('doc:print', payload),
-  exportDoc: (payload: { title: string; content: string; format: 'pdf' | 'word'|'html' | 'htm' }) => ipcRenderer.invoke('doc:export', payload),
   openDoc: (payload: { filePath: string }) => ipcRenderer.invoke('doc:open', payload),
   revealDoc: (payload: { filePath: string }) => ipcRenderer.invoke('doc:reveal', payload),
   previewFile: (payload: { filePath: string }) => ipcRenderer.invoke('file:preview', payload),
