@@ -56,6 +56,7 @@ interface Window {
     importTemplates: () => Promise<boolean>
     onlyofficeGetConfig: (payload: { type: 'doc' | 'template'; id: number; title: string }) => Promise<{
       scriptUrl: string
+      documentServerUrl?: string
       document: {
         title: string
         url: string

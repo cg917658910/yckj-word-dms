@@ -153,6 +153,7 @@ const EditorPane = ({
           return
         }
         editorRef.current = new window.DocsAPI.DocEditor(containerId, {
+          documentServerUrl: cfg.documentServerUrl || undefined,
           documentType: 'word',
           type: 'desktop',
           document: cfg.document,

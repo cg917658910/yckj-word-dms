@@ -1,4 +1,5 @@
 ﻿import { ipcMain } from 'electron'
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
@@ -18,11 +19,56 @@ let port = 0
 let readyPromise: Promise<void> | null = null
 const BRIDGE_PORT = Number(process.env.ONLYOFFICE_BRIDGE_PORT || 59050)
 
-const baseUrl = () => `http://127.0.0.1:${port}`
-const DOC_SERVER_URL = (process.env.ONLYOFFICE_SERVER_URL || 'http://127.0.0.1:8443').replace(/\/$/, '')
+type OnlyOfficeRuntimeConfig = {
+  serverUrl: string
+  accessHost: string
+  tokenEnabled: boolean
+  tokenSecret: string
+}
+
 const normalizeHost = (value: string) => value.trim().replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '')
-const DOC_ACCESS_HOST = normalizeHost(process.env.ONLYOFFICE_DOC_ACCESS_HOST || 'host.docker.internal')
+
+const loadRuntimeConfig = (): OnlyOfficeRuntimeConfig => {
+  // IMPORTANT:
+  // CoAuthoring.server.port (commonly 8000) is an internal service port, not the public web endpoint.
+  // Public endpoint should be nginx/front service, e.g. http://127.0.0.1 or https://host:8443.
+  const envServerUrl = (process.env.ONLYOFFICE_SERVER_URL || '').trim()
+  const serverUrl = (envServerUrl || 'http://127.0.0.1').replace(/\/$/, '')
+  const tokenEnabled = Boolean(false)
+  const tokenSecret = String( process.env.ONLYOFFICE_JWT_SECRET || ''
+  )
+
+  const envAccessHost = normalizeHost(process.env.ONLYOFFICE_DOC_ACCESS_HOST || '')
+  const defaultAccessHost =
+    /:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(serverUrl) || /:\/\/(127\.0\.0\.1|localhost)\b/i.test(serverUrl)
+      ? '127.0.0.1'
+      : 'host.docker.internal'
+  const accessHost = envAccessHost || defaultAccessHost
+
+  return { serverUrl, accessHost, tokenEnabled, tokenSecret }
+}
+
+const RUNTIME = loadRuntimeConfig()
+const baseUrl = () => `http://127.0.0.1:${port}`
+const DOC_SERVER_URL = RUNTIME.serverUrl
+const DOC_ACCESS_HOST = RUNTIME.accessHost
 const baseUrlForDocServer = () => `http://${DOC_ACCESS_HOST}:${port}`
+
+const toBase64Url = (input: Buffer | string) =>
+  Buffer.from(input)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+
+const signJwt = (payload: Record<string, unknown>, secret: string) => {
+  const header = { alg: 'HS256', typ: 'JWT' }
+  const encodedHeader = toBase64Url(JSON.stringify(header))
+  const encodedPayload = toBase64Url(JSON.stringify(payload))
+  const body = `${encodedHeader}.${encodedPayload}`
+  const signature = crypto.createHmac('sha256', secret).update(body).digest()
+  return `${body}.${toBase64Url(signature)}`
+}
 
 const parseTarget = (pathname: string) => {
   const parts = pathname.split('/').filter(Boolean)
@@ -267,13 +313,15 @@ export const registerOnlyOfficeIpc = () => {
       if (!record?.filePath || !fs.existsSync(record.filePath)) return null
       const stat = fs.statSync(record.filePath)
       const ext = normalizeWordExt(record.filePath)
-      return {
+      const config = {
         scriptUrl: `${DOC_SERVER_URL}/web-apps/apps/api/documents/api.js`,
+        documentServerUrl: `${DOC_SERVER_URL}/`,
         document: {
           title: payload.title,
           url: `${baseUrlForDocServer()}/onlyoffice/file/${payload.type}/${payload.id}/${encodeURIComponent(toSafeFileName(payload.title, ext))}`,
           fileType: ext.slice(1),
-          key: `${payload.type}-${payload.id}-${stat.mtimeMs}`,
+          // Use a one-time key to avoid stale cache collisions in local single-user mode.
+          key: `${payload.type}-${payload.id}-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
           permissions: {
             edit: true,
             download: true,
@@ -293,6 +341,24 @@ export const registerOnlyOfficeIpc = () => {
           forcesave: false,
         },
       }
+      if (RUNTIME.tokenEnabled && RUNTIME.tokenSecret) {
+        const documentToken = signJwt({ document: config.document }, RUNTIME.tokenSecret)
+        const editorToken = signJwt({ editorConfig: config.editorConfig }, RUNTIME.tokenSecret)
+        ;(config as any).document.token = documentToken
+        ;(config as any).editorConfig.token = editorToken
+        ;(config as any).token = signJwt(
+          {
+            document: config.document,
+            documentType: 'word',
+            editorConfig: config.editorConfig,
+            type: 'desktop',
+          },
+          RUNTIME.tokenSecret
+        )
+      }
+      return config
     }
   )
 }
+
+
