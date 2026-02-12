@@ -35,7 +35,6 @@ if (new Date() > end) {
   app.quit()
   process.exit(0)
 }
-
 let win: BrowserWindow | null = null
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
@@ -61,6 +60,12 @@ async function createWindow() {
 
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', new Date().toLocaleString())
+    // 提示试用
+    dialog.showMessageBox(win!, {
+      type: 'info',
+      title: '易诚无忧提示',
+      message: '当前软件处于试用阶段',
+    })
   })
 
   win.webContents.setWindowOpenHandler(({ url }) => {

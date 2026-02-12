@@ -107,34 +107,21 @@ const EditorPane = ({
         const cfg = await window.api.onlyofficeGetConfig({
           type: viewMode,
           id: activeId,
-          title: activeTitle,
+          title: activeTitle || titleDraft || 'document',
         })
         if (!cfg) {
           setError('无法获取文档配置')
           setLoading(false)
           return
         }
-        // Preflight from renderer only for local loopback URLs.
-        // When using host.docker.internal, the URL is intended for Document Server container.
-        const isDockerHostUrl = /:\/\/host\.docker\.internal(?::\d+)?\//i.test(cfg.document.url)
-        if (!isDockerHostUrl) {
+        // Performance-first: skip heavy preflight download before initializing editor.
+        // Enable lightweight diagnostics only when explicitly requested.
+        const enablePreflight = import.meta.env.VITE_ONLYOFFICE_PREFLIGHT === '1'
+        if (enablePreflight) {
           try {
-            const preflight = await fetch(cfg.document.url, { method: 'GET' })
-            const contentType = preflight.headers.get('content-type') || ''
+            const preflight = await fetch(cfg.document.url, { method: 'HEAD' })
             if (!preflight.ok) {
               setError(`文档读取失败: ${preflight.status}`)
-              setLoading(false)
-              return
-            }
-            if (contentType.toLowerCase().includes('text/html')) {
-              setError(`文档地址返回 HTML（非文档流）: ${cfg.document.url}`)
-              setLoading(false)
-              return
-            }
-            const bytes = new Uint8Array(await preflight.arrayBuffer())
-            const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b
-            if ((cfg.document.fileType || '').toLowerCase() === 'docx' && !isZip) {
-              setError('文件扩展名为 docx，但内容不是有效 docx（缺少 PK 头）')
               setLoading(false)
               return
             }
@@ -271,12 +258,10 @@ const EditorPane = ({
         <div className='doc-preview-placeholder' style={{ display: activeId ? 'none' : 'block' }}>
           请选择文档或模板
         </div>
-        <div className='doc-preview-placeholder' style={{ display: loading ? 'block' : 'none' }}>
-          正在加载编辑器...
-        </div>
         <div className='doc-preview-placeholder' style={{ display: error ? 'block' : 'none' }}>
           {error}
         </div>
+        <div className='editor-loading-mask' style={{ display: loading ? 'block' : 'none' }} />
         <div id={containerId} className='onlyoffice-container' />
       </div>
     </section>

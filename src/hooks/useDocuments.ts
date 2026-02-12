@@ -10,6 +10,7 @@ type Options = {
 export const useDocuments = ({ openDialog }: Options) => {
   const refreshTokenRef = useRef(0)
   const folderMutationRef = useRef(false)
+  const delayedRefreshTimerRef = useRef<number | null>(null)
   const [folderRows, setFolderRows] = useState<FolderRow[]>([])
   const [docs, setDocs] = useState<DocSummary[]>([])
   const [activeFolderId, setActiveFolderId] = useState<number | null>(null)
@@ -99,8 +100,20 @@ export const useDocuments = ({ openDialog }: Options) => {
   }
 
   const handleSelectDoc = async (docId: number) => {
+    if (delayedRefreshTimerRef.current) {
+      window.clearTimeout(delayedRefreshTimerRef.current)
+      delayedRefreshTimerRef.current = null
+    }
     const detail = await window.api.db.getDoc(docId)
     setActiveDoc(detail)
+    const baselineUpdatedAt = detail?.updatedAt ?? ''
+    delayedRefreshTimerRef.current = window.setTimeout(async () => {
+      const latest = await window.api.db.getDoc(docId)
+      if (!latest) return
+      if ((latest.updatedAt ?? '') !== baselineUpdatedAt || (latest.filePath ?? '') !== (detail?.filePath ?? '')) {
+        setActiveDoc(latest)
+      }
+    }, 1200)
   }
 
   const handleToggleFolder = (id: number) => {

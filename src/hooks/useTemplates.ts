@@ -16,6 +16,7 @@ type Options = {
 export const useTemplates = ({ openDialog }: Options) => {
   const refreshTokenRef = useRef(0)
   const folderMutationRef = useRef(false)
+  const delayedRefreshTimerRef = useRef<number | null>(null)
   const [templateFolderRows, setTemplateFolderRows] = useState<TemplateFolderRow[]>([])
   const [templates, setTemplates] = useState<TemplateRow[]>([])
   const [activeTemplateFolderId, setActiveTemplateFolderId] = useState<number | null>(null)
@@ -89,8 +90,22 @@ export const useTemplates = ({ openDialog }: Options) => {
   }
 
   const handleSelectTemplate = (templateId: number) => {
+    if (delayedRefreshTimerRef.current) {
+      window.clearTimeout(delayedRefreshTimerRef.current)
+      delayedRefreshTimerRef.current = null
+    }
     const item = templates.find((tpl) => tpl.id === templateId) ?? null
     setActiveTemplate(item)
+    const baselineUpdatedAt = item?.updatedAt ?? ''
+    delayedRefreshTimerRef.current = window.setTimeout(async () => {
+      const latestList = await window.api.db.listTemplates()
+      const latest = latestList.find((tpl) => tpl.id === templateId) ?? null
+      if (!latest) return
+      if ((latest.updatedAt ?? '') !== baselineUpdatedAt || (latest.filePath ?? '') !== (item?.filePath ?? '')) {
+        setActiveTemplate(latest)
+        setTemplates((prev) => prev.map((tpl) => (tpl.id === templateId ? latest : tpl)))
+      }
+    }, 1200)
   }
 
   const handleToggleTemplateFolder = (id: number) => {
@@ -191,9 +206,6 @@ export const useTemplates = ({ openDialog }: Options) => {
         syncTreeWithTemplates(next)
         const created = next.find((tpl) => tpl.id === id) ?? null
         setActiveTemplate(created)
-        if (created?.filePath) {
-          await window.api.openDoc({ filePath: created.filePath })
-        }
       },
     })
   }

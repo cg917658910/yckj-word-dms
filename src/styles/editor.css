@@ -144,6 +144,15 @@
   overflow: auto;
   padding: 12px 28px 24px;
   min-height: 0;
+  position: relative;
+}
+
+.editor-loading-mask {
+  position: absolute;
+  inset: 12px 28px 24px;
+  background: transparent;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .onlyoffice-container {
