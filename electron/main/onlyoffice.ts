@@ -2,7 +2,14 @@
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { getDocumentById, getTemplateById, touchDocument, touchTemplate } from './db'
+import {
+  ensureDocumentFile,
+  ensureTemplateFile,
+  getDocumentById,
+  getTemplateById,
+  touchDocument,
+  touchTemplate,
+} from './db'
 
 type TargetType = 'doc' | 'template'
 
@@ -253,7 +260,10 @@ export const registerOnlyOfficeIpc = () => {
     async (_event, payload: { type: TargetType; id: number; title: string }) => {
       startServer()
       await readyPromise
-      const record = await getRecord(payload.type, payload.id)
+      const record =
+        payload.type === 'doc'
+          ? await ensureDocumentFile(payload.id)
+          : await ensureTemplateFile(payload.id)
       if (!record?.filePath || !fs.existsSync(record.filePath)) return null
       const stat = fs.statSync(record.filePath)
       const ext = normalizeWordExt(record.filePath)

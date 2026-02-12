@@ -145,10 +145,18 @@ const require = createRequire(import.meta.url)
 const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm')
 
 const getDataDir = () => {
-  //const dir = path.join(app.getPath('userData'), 'data')
-  const dir =  path.join(process.env.APP_ROOT, 'data')
+  const dir = path.join(app.getPath('userData'), 'data')
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true })
+  }
+  // One-time migration from legacy app-root storage used by older builds.
+  const legacyRoot = process.env.APP_ROOT ? path.join(process.env.APP_ROOT, 'data') : null
+  const legacyDb = legacyRoot ? path.join(legacyRoot, 'db.sqlite') : null
+  if (legacyDb && fs.existsSync(legacyDb)) {
+    const targetDb = path.join(dir, 'db.sqlite')
+    if (!fs.existsSync(targetDb)) {
+      fs.copyFileSync(legacyDb, targetDb)
+    }
   }
   return dir
 }
@@ -572,6 +580,50 @@ export async function getTemplateById(id: number): Promise<TemplateRow | null> {
     ...row,
     size,
   }
+}
+
+export async function ensureDocumentFile(id: number): Promise<DocDetail | null> {
+  const database = await ensureDb()
+  const row = get<{ id: number; title: string; content: string; filePath: string | null }>(
+    database,
+    'select id, title, content, file_path as filePath from documents where id = ?',
+    [id]
+  )
+  if (!row) return null
+  if (row.filePath && fs.existsSync(row.filePath)) {
+    return await getDocument(id)
+  }
+
+  const docsDir = ensureDocsDir()
+  const baseName = sanitizeFileName(row.title || '文档')
+  const candidate = path.join(docsDir, `${row.id}-${baseName}.docx`)
+  const filePath = await ensureUniquePath(candidate)
+  await writeDocxFile(filePath, row.content || '')
+  run(database, 'update documents set file_path = ?, updated_at = datetime(\'now\') where id = ?', [filePath, id])
+  saveDb(database, getDbPath())
+  return await getDocument(id)
+}
+
+export async function ensureTemplateFile(id: number): Promise<TemplateRow | null> {
+  const database = await ensureDb()
+  const row = get<{ id: number; name: string; content: string; filePath: string | null }>(
+    database,
+    'select id, name, content, file_path as filePath from templates where id = ?',
+    [id]
+  )
+  if (!row) return null
+  if (row.filePath && fs.existsSync(row.filePath)) {
+    return await getTemplateById(id)
+  }
+
+  const templatesDir = ensureTemplatesDir()
+  const baseName = sanitizeFileName(row.name || '模板')
+  const candidate = path.join(templatesDir, `${row.id}-${baseName}.docx`)
+  const filePath = await ensureUniquePath(candidate)
+  await writeDocxFile(filePath, row.content || '')
+  run(database, 'update templates set file_path = ?, updated_at = datetime(\'now\') where id = ?', [filePath, id])
+  saveDb(database, getDbPath())
+  return await getTemplateById(id)
 }
 
 export async function touchDocument(id: number) {
